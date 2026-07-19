@@ -1,48 +1,70 @@
-# Generic Home Assistant Vehicle Maintenance Dashboard
+# Vehicle Maintenance Card for Home Assistant
 
-This repository contains only a reusable Lovelace dashboard. It does not include,
-modify, or assume ownership of a Home Assistant maintenance package.
+A vehicle-neutral Lovelace card for displaying mileage-based maintenance sensors.
+The repository contains no maintenance package and no owner, location, device,
+registration, manufacturer, model, or notification-target information.
 
-The dashboard is intentionally vehicle-neutral. It contains no owner, device,
-location, registration, manufacturer, model, model year, notification target, or
-other personally identifiable information.
+## Install with HACS
 
-## Included file
+1. Open **HACS → Frontend**.
+2. Open the menu and choose **Custom repositories**.
+3. Enter the repository root URL—not a `/tree/...` or `/packages` URL:
 
-- `dashboards/vehicle_maintenance.yaml` — a manual-card YAML stack for one vehicle.
+   ```text
+   https://github.com/OWNER/REPOSITORY
+   ```
 
-## Frontend requirements
+4. Select **Dashboard** as the category and add the repository.
+5. Install **Vehicle Maintenance Card** and restart or refresh Home Assistant when
+   HACS requests it.
 
-Install these cards through HACS:
+The `hacs.json` manifest and root `vehicle-maint-card.js` file provide the
+repository structure HACS expects. The previous `packages` path is intentionally
+absent because this project does not distribute a Home Assistant package.
 
-- Mushroom
-- Auto Entities
-- Template Entity Row
-- card-mod
+## Add the card
 
-The dashboard does not require Browser Mod or a popup integration.
+Use this minimal manual-card configuration:
 
-## Configure it for a vehicle
+```yaml
+type: custom:vehicle-maint-card
+vehicle_name: My Vehicle
+entity_prefix: vehicle
+```
 
-1. Copy `dashboards/vehicle_maintenance.yaml` into a manual card.
-2. Search the copied YAML for `REPLACE_`. Every value with that prefix is a
-   configuration placeholder, not real vehicle information.
-3. Replace `REPLACE_VEHICLE_NAME` with the dashboard display name.
-4. Replace `replace_vehicle` with the common entity prefix used by the existing
-   maintenance package. For example, if a package exposes
-   `sensor.family_car_oil_change_miles_remaining`, use `family_car`.
-5. Replace the summary, odometer, helper, and script entity IDs if the existing
-   package uses a different naming scheme.
-6. Delete any optional action or setup section whose entities are not supplied by
-   that package.
+`entity_prefix` discovers numeric sensors matching:
 
-The only mandatory data for the two maintenance lists is a collection of numeric
-sensor states representing miles remaining. Those sensors should share a prefix
-and end in `_miles_remaining`. The dashboard filters and sorts them automatically.
+```text
+sensor.<entity_prefix>_*_miles_remaining
+```
 
-## Expected optional metadata
+For a package with differently named sensors, provide an explicit list instead:
 
-Rows are more descriptive when each miles-remaining sensor provides:
+```yaml
+type: custom:vehicle-maint-card
+vehicle_name: My Vehicle
+entities:
+  - sensor.vehicle_oil_change_miles_remaining
+  - sensor.vehicle_tire_rotation_miles_remaining
+```
+
+## Configuration
+
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `entity_prefix` | One of prefix/list | — | Discovers matching miles-remaining sensors. |
+| `entities` | One of prefix/list | — | Explicit entity list for packages without a common prefix. |
+| `vehicle_name` | No | `Vehicle Maintenance` | Non-sensitive heading displayed by the card. |
+| `odometer_entity` | No | — | Numeric odometer sensor shown in the header. |
+| `sync_script` | No | — | Script called by an optional Sync button. |
+| `due_miles` | No | `500` | Upper boundary for due status. |
+| `soon_miles` | No | `1500` | Upper boundary for soon status. |
+| `upcoming_miles` | No | `6000` | Maximum distance shown unless `show_all` is enabled. |
+| `show_all` | No | `false` | Shows services beyond the upcoming boundary. |
+| `icon` | No | `mdi:car` | Header icon. |
+
+Each maintenance sensor must have a numeric miles-remaining state. Negative values
+are displayed as overdue. These optional attributes improve presentation:
 
 ```yaml
 attributes:
@@ -50,8 +72,11 @@ attributes:
   next_due_mileage: 36000
 ```
 
-If `service_name` is missing, the row falls back to the entity's friendly name.
-If `next_due_mileage` is missing, the secondary due-mileage line is omitted.
+Selecting a maintenance row opens Home Assistant's standard entity details dialog.
 
-See the comments in the dashboard file for optional summary and action entities.
+## Manual installation
 
+1. Copy `vehicle-maint-card.js` to `config/www/vehicle-maint-card.js`.
+2. Add `/local/vehicle-maint-card.js` as a JavaScript module under dashboard
+   resources.
+3. Add the card using the YAML examples above.
