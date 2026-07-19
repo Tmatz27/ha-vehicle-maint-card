@@ -1,0 +1,1225 @@
+# 2024 Subaru Outback Wilderness — mileage maintenance package
+# Stable entity IDs intentionally have no version suffix.
+
+input_number:
+  outback_current_mileage:
+    name: Outback manual odometer
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_setup_mileage:
+    name: Setup mileage
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_oil_change:
+    name: Outback last oil change
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_oil_change_schedule_adjustment:
+    name: Outback oil change schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_tire_rotation:
+    name: Outback last tire rotation
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_tire_rotation_schedule_adjustment:
+    name: Outback tire rotation schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_engine_air_filter:
+    name: Outback last engine air filter
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_engine_air_filter_schedule_adjustment:
+    name: Outback engine air filter schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_cabin_air_filter:
+    name: Outback last cabin air filter
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_cabin_air_filter_schedule_adjustment:
+    name: Outback cabin air filter schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_brake_fluid:
+    name: Outback last brake fluid
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_brake_fluid_schedule_adjustment:
+    name: Outback brake fluid schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_coolant:
+    name: Outback last coolant
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_coolant_schedule_adjustment:
+    name: Outback coolant schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_transmission_fluid:
+    name: Outback last transmission fluid
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_transmission_fluid_schedule_adjustment:
+    name: Outback transmission fluid schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_differential_service:
+    name: Outback last differential service
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_differential_service_schedule_adjustment:
+    name: Outback differential service schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_wiper_blades:
+    name: Outback last wiper blades
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_wiper_blades_schedule_adjustment:
+    name: Outback wiper blades schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_battery_check:
+    name: Outback last battery check
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_battery_check_schedule_adjustment:
+    name: Outback battery check schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_tire_replacement:
+    name: Outback last tire replacement
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_tire_replacement_schedule_adjustment:
+    name: Outback tire replacement schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+  outback_last_spark_plug_replacement:
+    name: Outback last spark plug replacement
+    min: 0
+    max: 400000
+    step: 1
+    mode: box
+    unit_of_measurement: mi
+
+  outback_spark_plug_replacement_schedule_adjustment:
+    name: Outback spark plug replacement schedule adjustment
+    min: -200000
+    max: 200000
+    step: 100
+    mode: box
+    unit_of_measurement: mi
+
+input_boolean:
+  outback_track_oil_change:
+    name: Track Outback oil change
+    initial: true
+    icon: mdi:oil
+  outback_track_tire_rotation:
+    name: Track Outback tire rotation
+    initial: true
+    icon: mdi:rotate-right
+  outback_track_engine_air_filter:
+    name: Track Outback engine air filter
+    initial: true
+    icon: mdi:air-filter
+  outback_track_cabin_air_filter:
+    name: Track Outback cabin air filter
+    initial: true
+    icon: mdi:air-filter
+  outback_track_brake_fluid:
+    name: Track Outback brake fluid
+    initial: true
+    icon: mdi:car-brake-fluid-level
+  outback_track_coolant:
+    name: Track Outback coolant
+    initial: true
+    icon: mdi:coolant-temperature
+  outback_track_transmission_fluid:
+    name: Track Outback transmission fluid
+    initial: true
+    icon: mdi:car-shift-pattern
+  outback_track_differential_service:
+    name: Track Outback differential service
+    initial: true
+    icon: mdi:car-cog
+  outback_track_wiper_blades:
+    name: Track Outback wiper blades
+    initial: true
+    icon: mdi:wiper
+  outback_track_battery_check:
+    name: Track Outback battery check
+    initial: true
+    icon: mdi:car-battery
+  outback_track_tire_replacement:
+    name: Track Outback tire replacement
+    initial: true
+    icon: mdi:tire
+  outback_track_spark_plug_replacement:
+    name: Track Outback spark plug replacement
+    initial: true
+    icon: mdi:spark-plug
+
+  outback_service_30k_done:
+    name: Outback 30,000 mi Service completed
+    icon: mdi:clipboard-check-outline
+
+  outback_service_60k_done:
+    name: Outback 60,000 mi Service completed
+    icon: mdi:clipboard-check-outline
+
+  outback_service_90k_done:
+    name: Outback 90,000 mi Service completed
+    icon: mdi:clipboard-check-outline
+
+  outback_service_120k_done:
+    name: Outback 120,000 mi Service completed
+    icon: mdi:clipboard-check-outline
+
+  outback_service_125k_done:
+    name: Outback 125,000 mi Service completed
+    icon: mdi:clipboard-check-outline
+
+  outback_service_180k_done:
+    name: Outback 180,000 mi Service completed
+    icon: mdi:clipboard-check-outline
+
+  outback_service_200k_done:
+    name: Outback 200,000 mi Service completed
+    icon: mdi:clipboard-check-outline
+
+input_select:
+  outback_maintenance_service:
+    name: Service
+    options:
+      - Select service
+      - Oil Change
+      - Tire Rotation
+      - Engine Air Filter
+      - Cabin Air Filter
+      - Brake Fluid
+      - Coolant
+      - Transmission Fluid
+      - Differential Service
+      - Wiper Blades
+      - Battery Check
+      - Tire Replacement
+      - Spark Plug Replacement
+      - 30,000 mi Service
+      - 60,000 mi Service
+      - 90,000 mi Service
+      - 120,000 mi Service
+      - 125,000 mi Service
+      - 180,000 mi Service
+      - 200,000 mi Service
+    initial: Select service
+    icon: mdi:wrench-outline
+
+  outback_defer_amount:
+    name: Defer distance
+    options: ["500", "1000", "2000"]
+    initial: "1000"
+    icon: mdi:calendar-arrow-right
+
+  outback_setup_mode:
+    name: Setup method
+    options:
+      - Last completed at mileage
+      - Due at mileage
+      - Never performed
+      - Not tracked
+    initial: Last completed at mileage
+    icon: mdi:tune-variant
+
+group:
+  outback_maintenance_entities:
+    name: Outback maintenance entities
+    entities:
+      - sensor.outback_oil_change_miles_remaining
+      - sensor.outback_tire_rotation_miles_remaining
+      - sensor.outback_engine_air_filter_miles_remaining
+      - sensor.outback_cabin_air_filter_miles_remaining
+      - sensor.outback_brake_fluid_miles_remaining
+      - sensor.outback_coolant_miles_remaining
+      - sensor.outback_transmission_fluid_miles_remaining
+      - sensor.outback_differential_service_miles_remaining
+      - sensor.outback_wiper_blades_miles_remaining
+      - sensor.outback_battery_check_miles_remaining
+      - sensor.outback_tire_replacement_miles_remaining
+      - sensor.outback_spark_plug_replacement_miles_remaining
+      - sensor.outback_30k_service
+      - sensor.outback_60k_service
+      - sensor.outback_90k_service
+      - sensor.outback_120k_service
+      - sensor.outback_125k_service
+      - sensor.outback_180k_service
+      - sensor.outback_200k_service
+
+template:
+  - sensor:
+      - name: Outback Odometer Effective
+        unique_id: outback_odometer_effective
+        unit_of_measurement: mi
+        device_class: distance
+        state_class: total_increasing
+        icon: mdi:road-variant
+        availability: >-
+          {{ is_number(states('sensor.outback_odometer')) or is_number(states('input_number.outback_current_mileage')) }}
+        state: >-
+          {% set live = states('sensor.outback_odometer') %}
+          {{ live | int if is_number(live) else states('input_number.outback_current_mileage') | int(0) }}
+        attributes:
+          vehicle: 2024 Outback Wilderness
+          source: >-
+            {{ 'Subaru' if is_number(states('sensor.outback_odometer')) else 'Manual cache' }}
+
+      - name: Outback Oil Change Miles Remaining
+        unique_id: outback_oil_change_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:oil
+        availability: >-
+          {{ is_state('input_boolean.outback_track_oil_change', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_oil_change') | int(0) + 6000 + states('input_number.outback_oil_change_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Oil Change
+          interval_miles: 6000
+          last_completed_mileage: "{{ states('input_number.outback_last_oil_change') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_oil_change_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_oil_change') | int(0) + 6000 + states('input_number.outback_oil_change_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Tire Rotation Miles Remaining
+        unique_id: outback_tire_rotation_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:rotate-right
+        availability: >-
+          {{ is_state('input_boolean.outback_track_tire_rotation', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_tire_rotation') | int(0) + 6000 + states('input_number.outback_tire_rotation_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Tire Rotation
+          interval_miles: 6000
+          last_completed_mileage: "{{ states('input_number.outback_last_tire_rotation') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_tire_rotation_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_tire_rotation') | int(0) + 6000 + states('input_number.outback_tire_rotation_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Engine Air Filter Miles Remaining
+        unique_id: outback_engine_air_filter_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:air-filter
+        availability: >-
+          {{ is_state('input_boolean.outback_track_engine_air_filter', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_engine_air_filter') | int(0) + 30000 + states('input_number.outback_engine_air_filter_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Engine Air Filter
+          interval_miles: 30000
+          last_completed_mileage: "{{ states('input_number.outback_last_engine_air_filter') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_engine_air_filter_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_engine_air_filter') | int(0) + 30000 + states('input_number.outback_engine_air_filter_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Cabin Air Filter Miles Remaining
+        unique_id: outback_cabin_air_filter_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:air-filter
+        availability: >-
+          {{ is_state('input_boolean.outback_track_cabin_air_filter', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_cabin_air_filter') | int(0) + 12000 + states('input_number.outback_cabin_air_filter_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Cabin Air Filter
+          interval_miles: 12000
+          last_completed_mileage: "{{ states('input_number.outback_last_cabin_air_filter') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_cabin_air_filter_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_cabin_air_filter') | int(0) + 12000 + states('input_number.outback_cabin_air_filter_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Brake Fluid Miles Remaining
+        unique_id: outback_brake_fluid_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:car-brake-fluid-level
+        availability: >-
+          {{ is_state('input_boolean.outback_track_brake_fluid', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_brake_fluid') | int(0) + 30000 + states('input_number.outback_brake_fluid_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Brake Fluid
+          interval_miles: 30000
+          last_completed_mileage: "{{ states('input_number.outback_last_brake_fluid') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_brake_fluid_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_brake_fluid') | int(0) + 30000 + states('input_number.outback_brake_fluid_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Coolant Miles Remaining
+        unique_id: outback_coolant_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:coolant-temperature
+        availability: >-
+          {{ is_state('input_boolean.outback_track_coolant', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_coolant') | int(0) + 120000 + states('input_number.outback_coolant_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Coolant
+          interval_miles: 120000
+          last_completed_mileage: "{{ states('input_number.outback_last_coolant') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_coolant_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_coolant') | int(0) + 120000 + states('input_number.outback_coolant_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Transmission Fluid Miles Remaining
+        unique_id: outback_transmission_fluid_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:car-shift-pattern
+        availability: >-
+          {{ is_state('input_boolean.outback_track_transmission_fluid', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_transmission_fluid') | int(0) + 60000 + states('input_number.outback_transmission_fluid_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Transmission Fluid
+          interval_miles: 60000
+          last_completed_mileage: "{{ states('input_number.outback_last_transmission_fluid') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_transmission_fluid_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_transmission_fluid') | int(0) + 60000 + states('input_number.outback_transmission_fluid_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Differential Service Miles Remaining
+        unique_id: outback_differential_service_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:car-cog
+        availability: >-
+          {{ is_state('input_boolean.outback_track_differential_service', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_differential_service') | int(0) + 30000 + states('input_number.outback_differential_service_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Differential Service
+          interval_miles: 30000
+          last_completed_mileage: "{{ states('input_number.outback_last_differential_service') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_differential_service_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_differential_service') | int(0) + 30000 + states('input_number.outback_differential_service_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Wiper Blades Miles Remaining
+        unique_id: outback_wiper_blades_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:wiper
+        availability: >-
+          {{ is_state('input_boolean.outback_track_wiper_blades', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_wiper_blades') | int(0) + 12000 + states('input_number.outback_wiper_blades_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Wiper Blades
+          interval_miles: 12000
+          last_completed_mileage: "{{ states('input_number.outback_last_wiper_blades') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_wiper_blades_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_wiper_blades') | int(0) + 12000 + states('input_number.outback_wiper_blades_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Battery Check Miles Remaining
+        unique_id: outback_battery_check_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:car-battery
+        availability: >-
+          {{ is_state('input_boolean.outback_track_battery_check', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_battery_check') | int(0) + 60000 + states('input_number.outback_battery_check_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Battery Check
+          interval_miles: 60000
+          last_completed_mileage: "{{ states('input_number.outback_last_battery_check') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_battery_check_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_battery_check') | int(0) + 60000 + states('input_number.outback_battery_check_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Tire Replacement Miles Remaining
+        unique_id: outback_tire_replacement_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:tire
+        availability: >-
+          {{ is_state('input_boolean.outback_track_tire_replacement', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_tire_replacement') | int(0) + 50000 + states('input_number.outback_tire_replacement_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Tire Replacement
+          interval_miles: 50000
+          last_completed_mileage: "{{ states('input_number.outback_last_tire_replacement') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_tire_replacement_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_tire_replacement') | int(0) + 50000 + states('input_number.outback_tire_replacement_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback Spark Plug Replacement Miles Remaining
+        unique_id: outback_spark_plug_replacement_miles_remaining
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:spark-plug
+        availability: >-
+          {{ is_state('input_boolean.outback_track_spark_plug_replacement', 'on') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ states('input_number.outback_last_spark_plug_replacement') | int(0) + 60000 + states('input_number.outback_spark_plug_replacement_schedule_adjustment') | int(0) - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: Spark Plug Replacement
+          interval_miles: 60000
+          last_completed_mileage: "{{ states('input_number.outback_last_spark_plug_replacement') | int(0) }}"
+          schedule_adjustment: "{{ states('input_number.outback_spark_plug_replacement_schedule_adjustment') | int(0) }}"
+          next_due_mileage: >-
+            {{ states('input_number.outback_last_spark_plug_replacement') | int(0) + 60000 + states('input_number.outback_spark_plug_replacement_schedule_adjustment') | int(0) }}
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback 30,000 mi Service
+        unique_id: outback_30k_service
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:clipboard-check-outline
+        availability: >-
+          {{ is_state('input_boolean.outback_service_30k_done', 'off') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ 30000 - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: 30,000 mi Service
+          service_type: milestone
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback 60,000 mi Service
+        unique_id: outback_60k_service
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:clipboard-check-outline
+        availability: >-
+          {{ is_state('input_boolean.outback_service_60k_done', 'off') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ 60000 - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: 60,000 mi Service
+          service_type: milestone
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback 90,000 mi Service
+        unique_id: outback_90k_service
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:clipboard-check-outline
+        availability: >-
+          {{ is_state('input_boolean.outback_service_90k_done', 'off') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ 90000 - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: 90,000 mi Service
+          service_type: milestone
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback 120,000 mi Service
+        unique_id: outback_120k_service
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:clipboard-check-outline
+        availability: >-
+          {{ is_state('input_boolean.outback_service_120k_done', 'off') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ 120000 - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: 120,000 mi Service
+          service_type: milestone
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback 125,000 mi Service
+        unique_id: outback_125k_service
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:clipboard-check-outline
+        availability: >-
+          {{ is_state('input_boolean.outback_service_125k_done', 'off') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ 125000 - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: 125,000 mi Service
+          service_type: milestone
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback 180,000 mi Service
+        unique_id: outback_180k_service
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:clipboard-check-outline
+        availability: >-
+          {{ is_state('input_boolean.outback_service_180k_done', 'off') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ 180000 - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: 180,000 mi Service
+          service_type: milestone
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+      - name: Outback 200,000 mi Service
+        unique_id: outback_200k_service
+        unit_of_measurement: mi
+        device_class: distance
+        icon: mdi:clipboard-check-outline
+        availability: >-
+          {{ is_state('input_boolean.outback_service_200k_done', 'off') and is_number(states('sensor.outback_odometer_effective')) }}
+        state: >-
+          {{ 200000 - states('sensor.outback_odometer_effective') | int(0) }}
+        attributes:
+          service_name: 200,000 mi Service
+          service_type: milestone
+          status: >-
+            {% set remaining = this.state | int(999999) %}
+            {% if remaining < 0 %}overdue{% elif remaining <= 500 %}due{% elif remaining <= 1500 %}soon{% elif remaining <= 6000 %}upcoming{% else %}okay{% endif %}
+
+  - sensor:
+      - name: Outback Maintenance Summary
+        unique_id: outback_maintenance_summary
+        icon: mdi:car-wrench
+        state: >-
+          {% set ns = namespace(overdue=0, due=0, soon=0, upcoming=0) %}
+          {% for item in expand('group.outback_maintenance_entities') %}
+            {% set miles = item.state | int(999999) %}
+            {% if miles < 0 %}{% set ns.overdue = ns.overdue + 1 %}
+            {% elif miles <= 500 %}{% set ns.due = ns.due + 1 %}
+            {% elif miles <= 1500 %}{% set ns.soon = ns.soon + 1 %}
+            {% elif miles <= 6000 %}{% set ns.upcoming = ns.upcoming + 1 %}{% endif %}
+          {% endfor %}
+          {{ 'overdue' if ns.overdue else 'due' if ns.due else 'soon' if ns.soon else 'upcoming' if ns.upcoming else 'okay' }}
+        attributes:
+          vehicle_name: 2024 Outback Wilderness
+          odometer: "{{ states('sensor.outback_odometer_effective') | int(0) }}"
+          odometer_source: "{{ state_attr('sensor.outback_odometer_effective', 'source') }}"
+          maintenance_entities:
+            - sensor.outback_oil_change_miles_remaining
+            - sensor.outback_tire_rotation_miles_remaining
+            - sensor.outback_engine_air_filter_miles_remaining
+            - sensor.outback_cabin_air_filter_miles_remaining
+            - sensor.outback_brake_fluid_miles_remaining
+            - sensor.outback_coolant_miles_remaining
+            - sensor.outback_transmission_fluid_miles_remaining
+            - sensor.outback_differential_service_miles_remaining
+            - sensor.outback_wiper_blades_miles_remaining
+            - sensor.outback_battery_check_miles_remaining
+            - sensor.outback_tire_replacement_miles_remaining
+            - sensor.outback_spark_plug_replacement_miles_remaining
+            - sensor.outback_30k_service
+            - sensor.outback_60k_service
+            - sensor.outback_90k_service
+            - sensor.outback_120k_service
+            - sensor.outback_125k_service
+            - sensor.outback_180k_service
+            - sensor.outback_200k_service
+          overdue_count: >-
+            {% set ns = namespace(count=0) %}
+            {% for item in expand('group.outback_maintenance_entities') %}
+              {% set miles = item.state | int(999999) %}
+              {% if miles < 0 %}{% set ns.count = ns.count + 1 %}{% endif %}
+            {% endfor %}
+            {{ ns.count }}
+          due_count: >-
+            {% set ns = namespace(count=0) %}
+            {% for item in expand('group.outback_maintenance_entities') %}
+              {% set miles = item.state | int(999999) %}
+              {% if 0 <= miles <= 500 %}{% set ns.count = ns.count + 1 %}{% endif %}
+            {% endfor %}
+            {{ ns.count }}
+          soon_count: >-
+            {% set ns = namespace(count=0) %}
+            {% for item in expand('group.outback_maintenance_entities') %}
+              {% set miles = item.state | int(999999) %}
+              {% if 500 < miles <= 1500 %}{% set ns.count = ns.count + 1 %}{% endif %}
+            {% endfor %}
+            {{ ns.count }}
+          upcoming_count: >-
+            {% set ns = namespace(count=0) %}
+            {% for item in expand('group.outback_maintenance_entities') %}
+              {% set miles = item.state | int(999999) %}
+              {% if 1500 < miles <= 6000 %}{% set ns.count = ns.count + 1 %}{% endif %}
+            {% endfor %}
+            {{ ns.count }}
+
+automation:
+  - id: outback_cache_odometer
+    alias: Outback cache odometer
+    triggers:
+      - trigger: state
+        entity_id: sensor.outback_odometer
+    conditions:
+      - condition: template
+        value_template: "{{ is_number(states('sensor.outback_odometer')) }}"
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.outback_current_mileage
+        data:
+          value: "{{ states('sensor.outback_odometer') | int }}"
+    mode: queued
+    max: 10
+
+  - id: outback_weekly_maintenance_notification
+    alias: Outback weekly maintenance notification
+    triggers:
+      - trigger: time
+        at: "17:00:00"
+    conditions:
+      - condition: time
+        weekday: [sun]
+    actions:
+      - variables:
+          entities: "{{ state_attr('sensor.outback_maintenance_summary', 'maintenance_entities') | default([], true) }}"
+          due_items: >-
+            {% set ns = namespace(items=[]) %}
+            {% for entity in entities %}
+              {% set miles = states(entity) | int(999999) %}
+              {% if miles <= 1500 %}
+                {% set name = state_attr(entity, 'service_name') | default(state_attr(entity, 'friendly_name'), true) %}
+                {% set ns.items = ns.items + [{'name': name, 'remaining': miles}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | sort(attribute='remaining') }}
+      - condition: template
+        value_template: "{{ due_items | length > 0 }}"
+      - action: notify.vehicle_maintenance
+        data:
+          title: Outback maintenance
+          message: >-
+            2024 Outback Wilderness ({{ states('sensor.outback_odometer_effective') | int(0) }} mi):
+            {% for item in due_items %}
+            - {{ item.name }}: {% if item.remaining < 0 %}{{ item.remaining | abs }} mi overdue{% else %}{{ item.remaining }} mi remaining{% endif %}
+            {% endfor %}
+          data:
+            tag: outback_maintenance
+            group: vehicle_maintenance
+            notification_icon: mdi:car-wrench
+    mode: single
+
+script:
+  outback_sync_odometer:
+    alias: Sync Outback odometer
+    sequence:
+      - condition: template
+        value_template: "{{ is_number(states('sensor.outback_odometer')) }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.outback_current_mileage
+        data:
+          value: "{{ states('sensor.outback_odometer') | int }}"
+
+  outback_log_maintenance:
+    alias: Log Outback maintenance
+    mode: single
+    sequence:
+      - variables:
+          selection: "{{ states('input_select.outback_maintenance_service') }}"
+          odometer: "{{ states('sensor.outback_odometer_effective') | int(-1) }}"
+          maintenance_items:
+            - name: Oil Change
+              last_entity: input_number.outback_last_oil_change
+              adjustment_entity: input_number.outback_oil_change_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_oil_change
+              interval: 6000
+            - name: Tire Rotation
+              last_entity: input_number.outback_last_tire_rotation
+              adjustment_entity: input_number.outback_tire_rotation_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_tire_rotation
+              interval: 6000
+            - name: Engine Air Filter
+              last_entity: input_number.outback_last_engine_air_filter
+              adjustment_entity: input_number.outback_engine_air_filter_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_engine_air_filter
+              interval: 30000
+            - name: Cabin Air Filter
+              last_entity: input_number.outback_last_cabin_air_filter
+              adjustment_entity: input_number.outback_cabin_air_filter_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_cabin_air_filter
+              interval: 12000
+            - name: Brake Fluid
+              last_entity: input_number.outback_last_brake_fluid
+              adjustment_entity: input_number.outback_brake_fluid_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_brake_fluid
+              interval: 30000
+            - name: Coolant
+              last_entity: input_number.outback_last_coolant
+              adjustment_entity: input_number.outback_coolant_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_coolant
+              interval: 120000
+            - name: Transmission Fluid
+              last_entity: input_number.outback_last_transmission_fluid
+              adjustment_entity: input_number.outback_transmission_fluid_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_transmission_fluid
+              interval: 60000
+            - name: Differential Service
+              last_entity: input_number.outback_last_differential_service
+              adjustment_entity: input_number.outback_differential_service_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_differential_service
+              interval: 30000
+            - name: Wiper Blades
+              last_entity: input_number.outback_last_wiper_blades
+              adjustment_entity: input_number.outback_wiper_blades_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_wiper_blades
+              interval: 12000
+            - name: Battery Check
+              last_entity: input_number.outback_last_battery_check
+              adjustment_entity: input_number.outback_battery_check_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_battery_check
+              interval: 60000
+            - name: Tire Replacement
+              last_entity: input_number.outback_last_tire_replacement
+              adjustment_entity: input_number.outback_tire_replacement_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_tire_replacement
+              interval: 50000
+            - name: Spark Plug Replacement
+              last_entity: input_number.outback_last_spark_plug_replacement
+              adjustment_entity: input_number.outback_spark_plug_replacement_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_spark_plug_replacement
+              interval: 60000
+            - name: 30,000 mi Service
+              milestone_entity: input_boolean.outback_service_30k_done
+            - name: 60,000 mi Service
+              milestone_entity: input_boolean.outback_service_60k_done
+            - name: 90,000 mi Service
+              milestone_entity: input_boolean.outback_service_90k_done
+            - name: 120,000 mi Service
+              milestone_entity: input_boolean.outback_service_120k_done
+            - name: 125,000 mi Service
+              milestone_entity: input_boolean.outback_service_125k_done
+            - name: 180,000 mi Service
+              milestone_entity: input_boolean.outback_service_180k_done
+            - name: 200,000 mi Service
+              milestone_entity: input_boolean.outback_service_200k_done
+          selected: >-
+            {{ maintenance_items | selectattr('name', 'eq', selection) | list | first | default(dict()) }}
+      - choose:
+          - conditions: "{{ selection != 'Select service' and odometer >= 0 and selected != dict() }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ 'last_entity' in selected }}"
+                    sequence:
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.last_entity }}"
+                          value: "{{ odometer }}"
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.adjustment_entity }}"
+                          value: 0
+                      - action: input_boolean.turn_on
+                        data:
+                          entity_id: "{{ selected.tracking_entity }}"
+                  - conditions: "{{ 'milestone_entity' in selected }}"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        data:
+                          entity_id: "{{ selected.milestone_entity }}"
+              - action: persistent_notification.create
+                data:
+                  title: Maintenance logged
+                  message: "{{ selection }} was logged at {{ odometer }} mi."
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.outback_maintenance_service
+                data:
+                  option: Select service
+        default:
+          - action: persistent_notification.create
+            data:
+              title: Maintenance was not logged
+              message: Select a service and make sure the odometer is available.
+
+  outback_defer_maintenance:
+    alias: Defer Outback maintenance
+    mode: single
+    sequence:
+      - variables:
+          selection: "{{ states('input_select.outback_maintenance_service') }}"
+          amount: "{{ states('input_select.outback_defer_amount') | int(0) }}"
+          maintenance_items:
+            - name: Oil Change
+              last_entity: input_number.outback_last_oil_change
+              adjustment_entity: input_number.outback_oil_change_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_oil_change
+              interval: 6000
+            - name: Tire Rotation
+              last_entity: input_number.outback_last_tire_rotation
+              adjustment_entity: input_number.outback_tire_rotation_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_tire_rotation
+              interval: 6000
+            - name: Engine Air Filter
+              last_entity: input_number.outback_last_engine_air_filter
+              adjustment_entity: input_number.outback_engine_air_filter_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_engine_air_filter
+              interval: 30000
+            - name: Cabin Air Filter
+              last_entity: input_number.outback_last_cabin_air_filter
+              adjustment_entity: input_number.outback_cabin_air_filter_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_cabin_air_filter
+              interval: 12000
+            - name: Brake Fluid
+              last_entity: input_number.outback_last_brake_fluid
+              adjustment_entity: input_number.outback_brake_fluid_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_brake_fluid
+              interval: 30000
+            - name: Coolant
+              last_entity: input_number.outback_last_coolant
+              adjustment_entity: input_number.outback_coolant_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_coolant
+              interval: 120000
+            - name: Transmission Fluid
+              last_entity: input_number.outback_last_transmission_fluid
+              adjustment_entity: input_number.outback_transmission_fluid_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_transmission_fluid
+              interval: 60000
+            - name: Differential Service
+              last_entity: input_number.outback_last_differential_service
+              adjustment_entity: input_number.outback_differential_service_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_differential_service
+              interval: 30000
+            - name: Wiper Blades
+              last_entity: input_number.outback_last_wiper_blades
+              adjustment_entity: input_number.outback_wiper_blades_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_wiper_blades
+              interval: 12000
+            - name: Battery Check
+              last_entity: input_number.outback_last_battery_check
+              adjustment_entity: input_number.outback_battery_check_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_battery_check
+              interval: 60000
+            - name: Tire Replacement
+              last_entity: input_number.outback_last_tire_replacement
+              adjustment_entity: input_number.outback_tire_replacement_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_tire_replacement
+              interval: 50000
+            - name: Spark Plug Replacement
+              last_entity: input_number.outback_last_spark_plug_replacement
+              adjustment_entity: input_number.outback_spark_plug_replacement_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_spark_plug_replacement
+              interval: 60000
+            - name: 30,000 mi Service
+              milestone_entity: input_boolean.outback_service_30k_done
+            - name: 60,000 mi Service
+              milestone_entity: input_boolean.outback_service_60k_done
+            - name: 90,000 mi Service
+              milestone_entity: input_boolean.outback_service_90k_done
+            - name: 120,000 mi Service
+              milestone_entity: input_boolean.outback_service_120k_done
+            - name: 125,000 mi Service
+              milestone_entity: input_boolean.outback_service_125k_done
+            - name: 180,000 mi Service
+              milestone_entity: input_boolean.outback_service_180k_done
+            - name: 200,000 mi Service
+              milestone_entity: input_boolean.outback_service_200k_done
+          selected: >-
+            {{ maintenance_items | selectattr('name', 'eq', selection) | list | first | default(dict()) }}
+      - choose:
+          - conditions: "{{ selected != dict() and 'adjustment_entity' in selected and amount > 0 }}"
+            sequence:
+              - action: input_number.set_value
+                data:
+                  entity_id: "{{ selected.adjustment_entity }}"
+                  value: "{{ states(selected.adjustment_entity) | int(0) + amount }}"
+              - action: persistent_notification.create
+                data:
+                  title: Maintenance deferred
+                  message: "{{ selection }} was deferred by {{ amount }} mi; its completion history was not changed."
+        default:
+          - action: persistent_notification.create
+            data:
+              title: Maintenance was not deferred
+              message: Select a recurring service. Milestone services cannot be deferred.
+
+  outback_setup_maintenance:
+    alias: Configure Outback maintenance tracking
+    mode: single
+    sequence:
+      - variables:
+          selection: "{{ states('input_select.outback_maintenance_service') }}"
+          setup_mode: "{{ states('input_select.outback_setup_mode') }}"
+          mileage: "{{ states('input_number.outback_setup_mileage') | int(0) }}"
+          maintenance_items:
+            - name: Oil Change
+              last_entity: input_number.outback_last_oil_change
+              adjustment_entity: input_number.outback_oil_change_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_oil_change
+              interval: 6000
+            - name: Tire Rotation
+              last_entity: input_number.outback_last_tire_rotation
+              adjustment_entity: input_number.outback_tire_rotation_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_tire_rotation
+              interval: 6000
+            - name: Engine Air Filter
+              last_entity: input_number.outback_last_engine_air_filter
+              adjustment_entity: input_number.outback_engine_air_filter_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_engine_air_filter
+              interval: 30000
+            - name: Cabin Air Filter
+              last_entity: input_number.outback_last_cabin_air_filter
+              adjustment_entity: input_number.outback_cabin_air_filter_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_cabin_air_filter
+              interval: 12000
+            - name: Brake Fluid
+              last_entity: input_number.outback_last_brake_fluid
+              adjustment_entity: input_number.outback_brake_fluid_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_brake_fluid
+              interval: 30000
+            - name: Coolant
+              last_entity: input_number.outback_last_coolant
+              adjustment_entity: input_number.outback_coolant_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_coolant
+              interval: 120000
+            - name: Transmission Fluid
+              last_entity: input_number.outback_last_transmission_fluid
+              adjustment_entity: input_number.outback_transmission_fluid_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_transmission_fluid
+              interval: 60000
+            - name: Differential Service
+              last_entity: input_number.outback_last_differential_service
+              adjustment_entity: input_number.outback_differential_service_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_differential_service
+              interval: 30000
+            - name: Wiper Blades
+              last_entity: input_number.outback_last_wiper_blades
+              adjustment_entity: input_number.outback_wiper_blades_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_wiper_blades
+              interval: 12000
+            - name: Battery Check
+              last_entity: input_number.outback_last_battery_check
+              adjustment_entity: input_number.outback_battery_check_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_battery_check
+              interval: 60000
+            - name: Tire Replacement
+              last_entity: input_number.outback_last_tire_replacement
+              adjustment_entity: input_number.outback_tire_replacement_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_tire_replacement
+              interval: 50000
+            - name: Spark Plug Replacement
+              last_entity: input_number.outback_last_spark_plug_replacement
+              adjustment_entity: input_number.outback_spark_plug_replacement_schedule_adjustment
+              tracking_entity: input_boolean.outback_track_spark_plug_replacement
+              interval: 60000
+            - name: 30,000 mi Service
+              milestone_entity: input_boolean.outback_service_30k_done
+            - name: 60,000 mi Service
+              milestone_entity: input_boolean.outback_service_60k_done
+            - name: 90,000 mi Service
+              milestone_entity: input_boolean.outback_service_90k_done
+            - name: 120,000 mi Service
+              milestone_entity: input_boolean.outback_service_120k_done
+            - name: 125,000 mi Service
+              milestone_entity: input_boolean.outback_service_125k_done
+            - name: 180,000 mi Service
+              milestone_entity: input_boolean.outback_service_180k_done
+            - name: 200,000 mi Service
+              milestone_entity: input_boolean.outback_service_200k_done
+          selected: >-
+            {{ maintenance_items | selectattr('name', 'eq', selection) | list | first | default(dict()) }}
+      - choose:
+          - conditions: "{{ selected != dict() and 'last_entity' in selected }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ setup_mode == 'Not tracked' }}"
+                    sequence:
+                      - action: input_boolean.turn_off
+                        data:
+                          entity_id: "{{ selected.tracking_entity }}"
+                  - conditions: "{{ setup_mode == 'Never performed' }}"
+                    sequence:
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.last_entity }}"
+                          value: 0
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.adjustment_entity }}"
+                          value: 0
+                      - action: input_boolean.turn_on
+                        data:
+                          entity_id: "{{ selected.tracking_entity }}"
+                  - conditions: "{{ setup_mode == 'Last completed at mileage' }}"
+                    sequence:
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.last_entity }}"
+                          value: "{{ mileage }}"
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.adjustment_entity }}"
+                          value: 0
+                      - action: input_boolean.turn_on
+                        data:
+                          entity_id: "{{ selected.tracking_entity }}"
+                  - conditions: "{{ setup_mode == 'Due at mileage' }}"
+                    sequence:
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.last_entity }}"
+                          value: "{{ [mileage - selected.interval, 0] | max }}"
+                      - action: input_number.set_value
+                        data:
+                          entity_id: "{{ selected.adjustment_entity }}"
+                          value: "{{ mileage - ([mileage - selected.interval, 0] | max) - selected.interval }}"
+                      - action: input_boolean.turn_on
+                        data:
+                          entity_id: "{{ selected.tracking_entity }}"
+              - action: persistent_notification.create
+                data:
+                  title: Maintenance setup updated
+                  message: "{{ selection }}: {{ setup_mode }}{% if setup_mode not in ['Never performed', 'Not tracked'] %} ({{ mileage }} mi){% endif %}."
+        default:
+          - action: persistent_notification.create
+            data:
+              title: Setup was not changed
+              message: Select a recurring service. Milestones are managed by their completion toggles.
