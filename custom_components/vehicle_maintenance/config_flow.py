@@ -9,6 +9,8 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_ODOMETER_ENTITY,
+    CONF_NOTIFY_SERVICE,
+    CONF_NOTIFY_THRESHOLD,
     CONF_SERVICES,
     CONF_VEHICLE_NAME,
     DOMAIN,
@@ -47,6 +49,14 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                vol.Optional(CONF_NOTIFY_SERVICE, default=""): selector.TextSelector(),
+                vol.Optional(
+                    CONF_NOTIFY_THRESHOLD, default=1500
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=10000, step=100, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema)
@@ -78,7 +88,9 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(
                     CONF_ODOMETER_ENTITY,
                     default=current[CONF_ODOMETER_ENTITY],
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
                 vol.Required(
                     CONF_SERVICES,
                     default=current[CONF_SERVICES],
@@ -87,6 +99,18 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
                         options=service_options,
                         multiple=True,
                         mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_NOTIFY_SERVICE,
+                    default=current.get(CONF_NOTIFY_SERVICE, ""),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_NOTIFY_THRESHOLD,
+                    default=current.get(CONF_NOTIFY_THRESHOLD, 1500),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=10000, step=100, mode=selector.NumberSelectorMode.BOX
                     )
                 ),
             }

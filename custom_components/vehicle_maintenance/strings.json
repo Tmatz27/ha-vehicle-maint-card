@@ -7,7 +7,9 @@
         "data": {
           "vehicle_name": "Vehicle name",
           "odometer_entity": "Odometer sensor",
-          "services": "Services to track"
+          "services": "Services to track",
+          "notify_service": "Optional notify service",
+          "notify_threshold": "Notification threshold (miles)"
         }
       }
     }
@@ -18,7 +20,9 @@
         "title": "Vehicle maintenance options",
         "data": {
           "odometer_entity": "Odometer sensor",
-          "services": "Services to track"
+          "services": "Services to track",
+          "notify_service": "Optional notify service",
+          "notify_threshold": "Notification threshold (miles)"
         }
       }
     }

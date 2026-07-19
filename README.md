@@ -28,6 +28,10 @@ Vehicle Maintenance cards—one card per vehicle.
 4. Select **Integration** as the category and install **Vehicle Maintenance**.
 5. Restart Home Assistant.
 
+On startup, the integration registers its bundled Lovelace resource automatically.
+After upgrading from an earlier release, perform a full browser refresh. The card
+will then appear in the dashboard card picker as **Vehicle Maintenance Card**.
+
 ## Add a vehicle
 
 1. Open **Settings → Devices & services**.
@@ -35,7 +39,9 @@ Vehicle Maintenance cards—one card per vehicle.
 3. Enter a non-sensitive vehicle display name.
 4. Select the vehicle's existing odometer sensor.
 5. Select every maintenance service that should be tracked.
-6. Submit the form.
+6. Optionally enter a notify service such as `notify.notify` and choose the mileage
+   threshold for the Sunday 17:00 maintenance summary.
+7. Submit the form.
 
 The integration creates:
 
@@ -47,17 +53,19 @@ The integration creates:
 Open the integration's **Configure** dialog later to change the odometer or tracked
 services.
 
-## Add the card resource
+## Card resource troubleshooting
 
-The integration serves its bundled card at:
+The integration automatically adds the bundled card resource in storage-mode
+dashboards and serves it at:
 
 ```text
 /vehicle-maintenance/vehicle-maint-card.js
 ```
 
-Add that URL once under **Settings → Dashboards → Resources** as a **JavaScript
-module**. If the Resources menu is hidden, enable Advanced Mode in the Home
-Assistant user profile.
+If the card does not appear after restarting and fully refreshing the browser, add
+that URL once under **Settings → Dashboards → Resources** as a **JavaScript
+module**. Do not add it a second time if an entry already exists. If the Resources
+menu is hidden, enable Advanced Mode in the Home Assistant user profile.
 
 ## Add and visually configure a card
 
@@ -90,6 +98,33 @@ The card provides a service selector and two actions:
 
 Both actions ask for confirmation. Selecting a maintenance row opens Home
 Assistant's standard entity details dialog.
+
+An expandable **Set maintenance history** section also supports the package-era
+setup workflows:
+
+- Last completed at a known mileage.
+- Due at a known mileage.
+- Never performed, with mileage zero retained as a valid baseline.
+
+Milestone services from 30,000 through 200,000 miles can be selected during
+integration setup. Logging a milestone completes and hides it; resetting it to
+Never performed makes it active again. The optional weekly notification includes
+all selected recurring and incomplete milestone services within the configured
+threshold.
+
+## Package functionality mapping
+
+| Previous package behavior | Integration behavior |
+| --- | --- |
+| Effective odometer template | User selects the authoritative odometer sensor. |
+| Miles-remaining templates | Integration creates standardized sensors. |
+| Selected service helper | Service selector is built into the card. |
+| Log script | **Log maintenance** card action and integration service. |
+| Extend script | **Extend maintenance** preserves completion history. |
+| Initial history setup | Expandable history workflow in the card. |
+| Milestone booleans | Persistent milestone completion state. |
+| Weekly mobile notification | Optional configurable notify service and threshold. |
+| Multiple copied packages | One config entry and one card per vehicle. |
 
 ## Default service intervals
 

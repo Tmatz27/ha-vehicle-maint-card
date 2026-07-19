@@ -100,6 +100,10 @@ class MaintenanceSensor(VehicleEntity):
         except (TypeError, ValueError):
             return None
         definition = SERVICE_CATALOG[self.service_key]
+        if definition.get("milestone"):
+            if self.service_key in vehicle.completed_milestones:
+                return None
+            return definition["interval"] - current_mileage
         return (
             vehicle.last_completed.get(self.service_key, 0)
             + definition["interval"]
@@ -109,6 +113,13 @@ class MaintenanceSensor(VehicleEntity):
 
     @property
     def available(self):
+        vehicle = self.hass.data[DOMAIN][self.entry.entry_id]
+        definition = SERVICE_CATALOG[self.service_key]
+        if (
+            definition.get("milestone")
+            and self.service_key in vehicle.completed_milestones
+        ):
+            return False
         data = {**self.entry.data, **self.entry.options}
         state = self.hass.states.get(data[CONF_ODOMETER_ENTITY])
         if state is None:
@@ -125,6 +136,7 @@ class MaintenanceSensor(VehicleEntity):
         definition = SERVICE_CATALOG[self.service_key]
         last = vehicle.last_completed.get(self.service_key, 0)
         extension = vehicle.extensions.get(self.service_key, 0)
+        milestone = definition.get("milestone", False)
         return {
             ATTR_ENTRY_ID: self.entry.entry_id,
             ATTR_SERVICE_KEY: self.service_key,
@@ -132,7 +144,13 @@ class MaintenanceSensor(VehicleEntity):
             "interval_miles": definition["interval"],
             "last_completed_mileage": last,
             "extension_miles": extension,
-            "next_due_mileage": last + definition["interval"] + extension,
+            "next_due_mileage": (
+                definition["interval"]
+                if milestone
+                else last + definition["interval"] + extension
+            ),
+            "milestone": milestone,
+            "completed": self.service_key in vehicle.completed_milestones,
         }
 
     async def async_added_to_hass(self):
