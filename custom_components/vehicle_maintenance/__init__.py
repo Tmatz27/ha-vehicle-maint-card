@@ -8,8 +8,8 @@ from pathlib import Path
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
@@ -30,7 +30,7 @@ from .const import (
 
 STORAGE_VERSION = 1
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.5.0"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.5.1"
 
 
 @dataclass
@@ -72,24 +72,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         [StaticPathConfig(CARD_URL, str(card_path), False)]
     )
 
-    async def async_register_card_resource(_event=None):
-        """Add the bundled card to storage-mode Lovelace automatically."""
-        lovelace = hass.data.get("lovelace")
-        resources = getattr(lovelace, "resources", None)
-        if resources is None:
-            return
-        await resources.async_load()
-        existing = resources.async_items()
-        if any(item.get("url", "").split("?", 1)[0] == CARD_URL for item in existing):
-            return
-        await resources.async_create_item(
-            {"res_type": "module", "url": CARD_RESOURCE_URL}
-        )
-
-    hass.bus.async_listen_once(
-        EVENT_HOMEASSISTANT_STARTED, async_register_card_resource
-    )
-    hass.async_create_task(async_register_card_resource())
+    # Load the card through Home Assistant's frontend integration instead of
+    # modifying Lovelace storage. This works for storage- and YAML-mode dashboards
+    # and makes the visual card/editor available as soon as the frontend loads.
+    add_extra_js_url(hass, CARD_RESOURCE_URL)
 
     async def find_vehicle(call: ServiceCall) -> VehicleData:
         entry_id = call.data[ATTR_ENTRY_ID]

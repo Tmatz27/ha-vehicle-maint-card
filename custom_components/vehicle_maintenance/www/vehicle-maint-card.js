@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.5.0";
+const CARD_VERSION = "0.5.1";
 const DOMAIN = "vehicle_maintenance";
 
 const escapeHtml = (value) => String(value ?? "")

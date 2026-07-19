@@ -28,9 +28,11 @@ Vehicle Maintenance cards—one card per vehicle.
 4. Select **Integration** as the category and install **Vehicle Maintenance**.
 5. Restart Home Assistant.
 
-On startup, the integration registers its bundled Lovelace resource automatically.
-After upgrading from an earlier release, perform a full browser refresh. The card
-will then appear in the dashboard card picker as **Vehicle Maintenance Card**.
+On startup, the integration loads its bundled card through Home Assistant's
+frontend component. It does not depend on a storage-mode Lovelace resource. After
+upgrading from an earlier release, restart Home Assistant and perform a full
+browser refresh. The card will then appear in the dashboard card picker as
+**Vehicle Maintenance Card**.
 
 ## Add a vehicle
 
@@ -53,19 +55,30 @@ The integration creates:
 Open the integration's **Configure** dialog later to change the odometer or tracked
 services.
 
-## Card resource troubleshooting
+## Card troubleshooting
 
-The integration automatically adds the bundled card resource in storage-mode
-dashboards and serves it at:
+The integration automatically loads the bundled card and serves it at:
 
 ```text
 /vehicle-maintenance/vehicle-maint-card.js
 ```
 
-If the card does not appear after restarting and fully refreshing the browser, add
-that URL once under **Settings → Dashboards → Resources** as a **JavaScript
-module**. Do not add it a second time if an entry already exists. If the Resources
-menu is hidden, enable Advanced Mode in the Home Assistant user profile.
+You should not need to add a dashboard resource manually. If an earlier version
+created a manual resource entry for this URL, remove that entry to prevent the
+card from being loaded twice. Then restart Home Assistant and clear the browser or
+companion-app frontend cache.
+
+If the URL above returns JavaScript when opened directly but the card is absent,
+check the browser console for `VEHICLE-MAINT-CARD`. Its version should match the
+installed integration version.
+
+## One repository or two?
+
+Only one repository is required. HACS installs this project as an **Integration**.
+The Python integration contains and serves the frontend JavaScript, and Home
+Assistant's frontend loader imports it globally. A separate HACS Dashboard
+repository would only be necessary if the card were intended to work without the
+integration.
 
 ## Add and visually configure a card
 
