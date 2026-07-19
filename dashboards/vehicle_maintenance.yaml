@@ -1,0 +1,17 @@
+# Example card configuration. Replace the generic entity prefix and optional
+# entity IDs with entities from the existing maintenance setup.
+type: custom:vehicle-maint-card
+vehicle_name: My Vehicle
+entity_prefix: vehicle
+odometer_entity: sensor.vehicle_odometer
+sync_script: script.vehicle_sync_odometer
+
+# Optional settings:
+# entities:
+#   - sensor.vehicle_oil_change_miles_remaining
+#   - sensor.vehicle_tire_rotation_miles_remaining
+# due_miles: 500
+# soon_miles: 1500
+# upcoming_miles: 6000
+# show_all: false
+# icon: mdi:car
