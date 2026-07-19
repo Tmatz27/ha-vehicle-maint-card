@@ -1,82 +1,99 @@
-# Vehicle Maintenance Card for Home Assistant
+# Vehicle Maintenance for Home Assistant
 
-A vehicle-neutral Lovelace card for displaying mileage-based maintenance sensors.
-The repository contains no maintenance package and no owner, location, device,
-registration, manufacturer, model, or notification-target information.
+A vehicle-neutral custom integration and Lovelace card for standardized,
+mileage-based vehicle maintenance. The repository contains no owner, location,
+device, registration, manufacturer, model, or notification-target information.
+
+## What changed
+
+The project is now a Home Assistant **integration**, rather than a YAML package or
+a dashboard-only repository. The integration owns the standardized entities and
+persistent maintenance state. The bundled card selects one integration-created
+vehicle entity and discovers the rest automatically.
+
+Each configured vehicle is independent, so a dashboard can contain multiple
+Vehicle Maintenance cards—one card per vehicle.
 
 ## Install with HACS
 
-1. Open **HACS → Frontend**.
-2. Open the menu and choose **Custom repositories**.
-3. Enter the repository root URL—not a `/tree/...` or `/packages` URL:
+1. Remove any earlier custom-repository entry that points to `/tree/...` or
+   `/packages`.
+2. Open **HACS → Integrations → Custom repositories**.
+3. Add the repository root URL:
 
    ```text
    https://github.com/OWNER/REPOSITORY
    ```
 
-4. Select **Dashboard** as the category and add the repository.
-5. Install **Vehicle Maintenance Card** and restart or refresh Home Assistant when
-   HACS requests it.
+4. Select **Integration** as the category and install **Vehicle Maintenance**.
+5. Restart Home Assistant.
 
-The `hacs.json` manifest and root `vehicle-maint-card.js` file provide the
-repository structure HACS expects. The previous `packages` path is intentionally
-absent because this project does not distribute a Home Assistant package.
+## Add a vehicle
 
-## Add the card
+1. Open **Settings → Devices & services**.
+2. Select **Add integration** and search for **Vehicle Maintenance**.
+3. Enter a non-sensitive vehicle display name.
+4. Select the vehicle's existing odometer sensor.
+5. Select every maintenance service that should be tracked.
+6. Submit the form.
 
-Use this minimal manual-card configuration:
+The integration creates:
 
-```yaml
-type: custom:vehicle-maint-card
-vehicle_name: My Vehicle
-entity_prefix: vehicle
-```
+- One main maintenance entity for card selection.
+- One miles-remaining sensor for every selected service.
+- A device that groups all entities belonging to that vehicle.
+- Persistent last-completed and extension values for each service.
 
-`entity_prefix` discovers numeric sensors matching:
+Open the integration's **Configure** dialog later to change the odometer or tracked
+services.
+
+## Add the card resource
+
+The integration serves its bundled card at:
 
 ```text
-sensor.<entity_prefix>_*_miles_remaining
+/vehicle-maintenance/vehicle-maint-card.js
 ```
 
-For a package with differently named sensors, provide an explicit list instead:
+Add that URL once under **Settings → Dashboards → Resources** as a **JavaScript
+module**. If the Resources menu is hidden, enable Advanced Mode in the Home
+Assistant user profile.
+
+## Add and visually configure a card
+
+1. Edit a dashboard and select **Add card**.
+2. Choose **Vehicle Maintenance Card**.
+3. Select a vehicle from the visual editor.
+4. Optionally adjust the upcoming-mile boundary and default extension amount.
+5. Save the card.
+
+No entity IDs need to be entered in YAML. The card stores only the selected main
+entity and uses its integration entry ID to find that vehicle's service sensors.
+
+Minimal YAML remains available for advanced users:
 
 ```yaml
 type: custom:vehicle-maint-card
-vehicle_name: My Vehicle
-entities:
-  - sensor.vehicle_oil_change_miles_remaining
-  - sensor.vehicle_tire_rotation_miles_remaining
+main_entity: sensor.my_vehicle_maintenance
+upcoming_miles: 6000
+extend_miles: 1000
 ```
 
-## Configuration
+## Card workflow
 
-| Option | Required | Default | Description |
-| --- | --- | --- | --- |
-| `entity_prefix` | One of prefix/list | — | Discovers matching miles-remaining sensors. |
-| `entities` | One of prefix/list | — | Explicit entity list for packages without a common prefix. |
-| `vehicle_name` | No | `Vehicle Maintenance` | Non-sensitive heading displayed by the card. |
-| `odometer_entity` | No | — | Numeric odometer sensor shown in the header. |
-| `sync_script` | No | — | Script called by an optional Sync button. |
-| `due_miles` | No | `500` | Upper boundary for due status. |
-| `soon_miles` | No | `1500` | Upper boundary for soon status. |
-| `upcoming_miles` | No | `6000` | Maximum distance shown unless `show_all` is enabled. |
-| `show_all` | No | `false` | Shows services beyond the upcoming boundary. |
-| `icon` | No | `mdi:car` | Header icon. |
+The card provides a service selector and two actions:
 
-Each maintenance sensor must have a numeric miles-remaining state. Negative values
-are displayed as overdue. These optional attributes improve presentation:
+- **Log maintenance** records the current odometer as the service's completion
+  mileage and clears any prior extension.
+- **Extend maintenance** moves the next due mileage by 500, 1,000, or 2,000 miles
+  without changing completion history.
 
-```yaml
-attributes:
-  service_name: Oil Change
-  next_due_mileage: 36000
-```
+Both actions ask for confirmation. Selecting a maintenance row opens Home
+Assistant's standard entity details dialog.
 
-Selecting a maintenance row opens Home Assistant's standard entity details dialog.
+## Default service intervals
 
-## Manual installation
-
-1. Copy `vehicle-maint-card.js` to `config/www/vehicle-maint-card.js`.
-2. Add `/local/vehicle-maint-card.js` as a JavaScript module under dashboard
-   resources.
-3. Add the card using the YAML examples above.
+Intervals are initial generic defaults and should be reviewed against the service
+schedule appropriate for the configured vehicle. They are centralized in
+`custom_components/vehicle_maintenance/const.py` so future versions can expose
+per-vehicle interval editing without changing the entity contract.

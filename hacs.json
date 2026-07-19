@@ -1,6 +1,5 @@
 {
-  "name": "Vehicle Maintenance Card",
-  "filename": "vehicle-maint-card.js",
-  "content_in_root": true,
+  "name": "Vehicle Maintenance",
+  "homeassistant": "2024.7.0",
   "render_readme": true
 }

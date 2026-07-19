@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a vehicle",
+        "description": "Select the vehicle odometer and maintenance services to track.",
+        "data": {
+          "vehicle_name": "Vehicle name",
+          "odometer_entity": "Odometer sensor",
+          "services": "Services to track"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Vehicle maintenance options",
+        "data": {
+          "odometer_entity": "Odometer sensor",
+          "services": "Services to track"
+        }
+      }
+    }
+  }
+}
