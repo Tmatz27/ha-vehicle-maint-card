@@ -1,64 +1,57 @@
-# Home Assistant Vehicle Maintenance
+# Generic Home Assistant Vehicle Maintenance Dashboard
 
-This repository contains a reusable Home Assistant package and Lovelace cards for
-mileage-based vehicle maintenance. The included example is configured for a
-2024 Subaru Outback Wilderness, but the naming and file layout are designed to
-make adding another vehicle predictable.
+This repository contains only a reusable Lovelace dashboard. It does not include,
+modify, or assume ownership of a Home Assistant maintenance package.
 
-## What is included
+The dashboard is intentionally vehicle-neutral. It contains no owner, device,
+location, registration, manufacturer, model, model year, notification target, or
+other personally identifiable information.
 
-- `packages/vehicle_outback.yaml` — helpers, maintenance sensors, notifications,
-  setup/log/defer scripts, and a vehicle summary sensor.
-- `dashboards/outback_maintenance.yaml` — a mobile-friendly dashboard stack using
-  Mushroom, Auto Entities, Template Entity Row, and card-mod.
-- `docs/ADDING_A_VEHICLE.md` — a repeatable checklist for cloning the package for
-  another vehicle.
+## Included file
 
-## Required frontend cards
+- `dashboards/vehicle_maintenance.yaml` — a manual-card YAML stack for one vehicle.
 
-Install these through HACS before using the dashboard:
+## Frontend requirements
+
+Install these cards through HACS:
 
 - Mushroom
 - Auto Entities
 - Template Entity Row
 - card-mod
 
-No popup or Browser Mod dependency is required.
+The dashboard does not require Browser Mod or a popup integration.
 
-## Installation
+## Configure it for a vehicle
 
-1. Copy `packages/vehicle_outback.yaml` into the Home Assistant `packages`
-   directory.
-2. Ensure packages are enabled in `configuration.yaml`:
+1. Copy `dashboards/vehicle_maintenance.yaml` into a manual card.
+2. Search the copied YAML for `REPLACE_`. Every value with that prefix is a
+   configuration placeholder, not real vehicle information.
+3. Replace `REPLACE_VEHICLE_NAME` with the dashboard display name.
+4. Replace `replace_vehicle` with the common entity prefix used by the existing
+   maintenance package. For example, if a package exposes
+   `sensor.family_car_oil_change_miles_remaining`, use `family_car`.
+5. Replace the summary, odometer, helper, and script entity IDs if the existing
+   package uses a different naming scheme.
+6. Delete any optional action or setup section whose entities are not supplied by
+   that package.
 
-   ```yaml
-   homeassistant:
-     packages: !include_dir_named packages
-   ```
+The only mandatory data for the two maintenance lists is a collection of numeric
+sensor states representing miles remaining. Those sensors should share a prefix
+and end in `_miles_remaining`. The dashboard filters and sorts them automatically.
 
-3. Change `notify.vehicle_maintenance` in the package to an existing notify
-   service, or create a notify group with that name.
-4. Restart Home Assistant and verify the configuration.
-5. Paste `dashboards/outback_maintenance.yaml` into a manual dashboard card.
+## Expected optional metadata
 
-## First-time setup
+Rows are more descriptive when each miles-remaining sensor provides:
 
-The package deliberately treats mileage `0` as valid. Tracking is controlled by
-a separate boolean for each service, so an untracked item is never confused with
-a vehicle whose service history genuinely starts at zero.
+```yaml
+attributes:
+  service_name: Oil Change
+  next_due_mileage: 36000
+```
 
-Open **Maintenance setup** on the dashboard, select a service, then choose one of
-these modes:
+If `service_name` is missing, the row falls back to the entity's friendly name.
+If `next_due_mileage` is missing, the secondary due-mileage line is omitted.
 
-- **Last completed at mileage** — stores the entered mileage as service history.
-- **Due at mileage** — derives the last-completed baseline from the normal interval.
-- **Never performed** — stores a zero-mile baseline and tracks the item normally.
-- **Not tracked** — hides the item from cards, summaries, and notifications.
-
-## Design notes
-
-Deferring a service no longer changes its last-completed mileage. Each recurring
-service has an independent extension helper; logging the service clears that
-extension. This preserves maintenance history while still allowing a due date to
-be moved temporarily.
+See the comments in the dashboard file for optional summary and action entities.
 
