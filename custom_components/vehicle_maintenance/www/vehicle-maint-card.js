@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.0.7";
+const CARD_VERSION = "0.0.8";
 const DOMAIN = "vehicle_maintenance";
 
 const escapeHtml = (value) => String(value ?? "")
@@ -6,6 +6,18 @@ const escapeHtml = (value) => String(value ?? "")
   .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 
 class VehicleMaintCard extends HTMLElement {
+  constructor() {
+    super();
+    this.addEventListener("focusout", () => {
+      setTimeout(() => {
+        if (this.pendingRender && !this.matches(":focus-within")) {
+          this.pendingRender = false;
+          this.render();
+        }
+      }, 0);
+    });
+  }
+
   static async getConfigElement() {
     return document.createElement("vehicle-maint-card-editor");
   }
@@ -23,7 +35,13 @@ class VehicleMaintCard extends HTMLElement {
   set hass(hass) {
     const previousHass = this._hass;
     this._hass = hass;
-    if (!previousHass || this.relevantStateChanged(previousHass, hass)) this.render();
+    if (!previousHass || this.relevantStateChanged(previousHass, hass)) {
+      if (this.matches(":focus-within")) {
+        this.pendingRender = true;
+      } else {
+        this.render();
+      }
+    }
   }
 
   relevantStateChanged(previousHass, nextHass) {
@@ -108,6 +126,7 @@ class VehicleMaintCard extends HTMLElement {
       service: this.selectedService,
     };
     if (action === "extend") data.miles = Number(this.extendMiles);
+    if (action === "log") data.mileage = Number(this.completionMileage);
     if (action === "setup") {
       data.mode = this.setupMode;
       data.mileage = Number(this.setupMileage || 0);
@@ -147,6 +166,10 @@ class VehicleMaintCard extends HTMLElement {
     const odometer = odometerState && Number.isFinite(Number(odometerState.state))
       ? `${Number(odometerState.state).toLocaleString()} mi`
       : "Odometer unavailable";
+    const odometerValue = odometerState && Number.isFinite(Number(odometerState.state))
+      ? Math.trunc(Number(odometerState.state))
+      : 0;
+    if (!this.completionMileageDirty) this.completionMileage = odometerValue;
     const options = entities.map((entity) => `
       <option value="${escapeHtml(entity.attributes.service_key)}" ${entity.attributes.service_key === this.selectedService ? "selected" : ""}>
         ${escapeHtml(entity.attributes.service_name || entity.attributes.friendly_name)}
@@ -170,13 +193,14 @@ class VehicleMaintCard extends HTMLElement {
       .chips{display:flex;gap:8px;padding:13px 18px;border-bottom:1px solid var(--divider-color);overflow:auto}.chip{white-space:nowrap;padding:6px 10px;border-radius:14px;background:var(--secondary-background-color);font-size:.82rem;font-weight:600}.overdue{color:var(--error-color)}.due{color:var(--warning-color,#ff9800)}.soon{color:#d89b00}.upcoming{color:var(--primary-color)}.okay{color:var(--success-color,#4caf50)}
       h3{margin:0;padding:16px 20px 8px}.row{display:flex;align-items:center;gap:13px;width:100%;min-height:66px;padding:10px 18px;border:0;border-top:1px solid var(--divider-color);color:var(--primary-text-color);background:transparent;text-align:left;cursor:pointer}.row:hover{background:color-mix(in srgb,var(--primary-color) 7%,transparent)}
       .icon{display:grid;place-items:center;flex:0 0 38px;height:38px;border-radius:13px;background:var(--secondary-background-color)}.copy{display:flex;flex:1;min-width:0;flex-direction:column}.copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.copy small{margin-top:2px;color:var(--secondary-text-color)}.miles{font-size:.86rem;font-weight:600;text-align:right}
-      .actions{margin:14px;padding:14px;border-radius:18px;background:var(--secondary-background-color)}.actions label{display:block;margin-bottom:6px;color:var(--secondary-text-color);font-size:.8rem}.controls{display:grid;grid-template-columns:minmax(0,1fr) 100px;gap:8px}.controls select,.setup-grid select,.setup-grid input{box-sizing:border-box;width:100%;min-height:42px;padding:0 10px;border:1px solid var(--divider-color);border-radius:12px;color:var(--primary-text-color);background:var(--card-background-color)}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.buttons button,.setup button{min-height:42px;border:0;border-radius:13px;font-weight:600;cursor:pointer}.log{color:var(--text-primary-color);background:var(--primary-color)}.extend,.setup button{color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 15%,transparent)}.setup{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color)}.setup summary{cursor:pointer;font-weight:600}.setup-grid{display:grid;grid-template-columns:1fr 110px;gap:8px;margin-top:10px}.setup button{width:100%;margin-top:8px}.message{padding:24px;text-align:center;color:var(--secondary-text-color)}
+      .actions{margin:14px;padding:14px;border-radius:18px;background:var(--secondary-background-color)}.actions label{display:block;margin-bottom:6px;color:var(--secondary-text-color);font-size:.8rem}.controls,.mileage-controls{display:grid;grid-template-columns:minmax(0,1fr) 100px;gap:8px}.controls select,.mileage-controls input,.setup-grid select,.setup-grid input{box-sizing:border-box;width:100%;min-height:42px;padding:0 10px;border:1px solid var(--divider-color);border-radius:12px;color:var(--primary-text-color);background:var(--card-background-color)}.mileage-label{margin-top:10px}.sync-mileage{border:0;border-radius:12px;color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 15%,transparent);font-weight:600;cursor:pointer}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.buttons button,.setup button{min-height:42px;border:0;border-radius:13px;font-weight:600;cursor:pointer}.log{color:var(--text-primary-color);background:var(--primary-color)}.extend,.setup button{color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 15%,transparent)}.setup{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color)}.setup summary{cursor:pointer;font-weight:600}.setup-grid{display:grid;grid-template-columns:1fr 110px;gap:8px;margin-top:10px}.setup button{width:100%;margin-top:8px}.message{padding:24px;text-align:center;color:var(--secondary-text-color)}
       @media(max-width:420px){.miles{max-width:95px}.hero{padding:18px}.controls{grid-template-columns:1fr 90px}}
     </style><ha-card>
       <div class="hero"><span class="car"><ha-icon icon="mdi:car"></ha-icon></span><span class="title"><b>${escapeHtml(main.attributes.vehicle_name || main.attributes.friendly_name)}</b><small>${escapeHtml(odometer)}</small></span></div>
       <div class="chips"><span class="chip overdue">${counts.overdue} overdue</span><span class="chip due">${counts.due} due</span><span class="chip soon">${counts.soon + counts.upcoming} upcoming</span></div>
       <h3>Maintenance</h3><div>${rows}</div>
       <div class="actions"><label>Selected service</label><div class="controls"><select class="service">${options}</select><select class="amount"><option value="500">500 mi</option><option value="1000">1,000 mi</option><option value="2000">2,000 mi</option></select></div>
+        <label class="mileage-label">Completion mileage</label><div class="mileage-controls"><input class="completion-mileage" type="number" min="0" value="${Number(this.completionMileage || 0)}"><button class="sync-mileage">Use current</button></div>
         <div class="buttons"><button class="log">Log maintenance</button><button class="extend">Extend maintenance</button></div>
         <details class="setup" ${this.setupOpen ? "open" : ""}><summary>Set maintenance history</summary><div class="setup-grid"><select class="setup-mode"><option value="last_completed">Last completed at mileage</option><option value="due_at">Due at mileage</option><option value="never_performed">Never performed</option></select><input class="setup-mileage" type="number" min="0" value="${Number(this.setupMileage || 0)}" aria-label="Setup mileage"></div><button class="apply-setup">Apply history</button></details></div>
     </ha-card>`;
@@ -184,6 +208,8 @@ class VehicleMaintCard extends HTMLElement {
     this.querySelector(".setup-mode").value = this.setupMode;
     this.querySelector(".setup")?.addEventListener("toggle", (event) => { this.setupOpen = event.target.open; });
     this.querySelector(".service")?.addEventListener("change", (event) => { this.selectedService = event.target.value; });
+    this.querySelector(".completion-mileage")?.addEventListener("input", (event) => { this.completionMileage = Number(event.target.value); this.completionMileageDirty = true; });
+    this.querySelector(".sync-mileage")?.addEventListener("click", () => { this.completionMileage = odometerValue; this.completionMileageDirty = false; this.querySelector(".completion-mileage").value = String(odometerValue); });
     amount?.addEventListener("change", (event) => { this.extendMiles = Number(event.target.value); });
     this.querySelector(".log")?.addEventListener("click", () => this.callAction("log"));
     this.querySelector(".extend")?.addEventListener("click", () => this.callAction("extend"));
@@ -195,8 +221,24 @@ class VehicleMaintCard extends HTMLElement {
 }
 
 class VehicleMaintCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.addEventListener("focusout", () => {
+      setTimeout(() => {
+        if (this.pendingEditorRender && !this.matches(":focus-within")) {
+          this.pendingEditorRender = false;
+          this.render();
+        }
+      }, 0);
+    });
+  }
+
   setConfig(config) { this.config = { ...config }; this.render(); }
-  set hass(hass) { this._hass = hass; this.render(); }
+  set hass(hass) {
+    this._hass = hass;
+    if (this.matches(":focus-within")) this.pendingEditorRender = true;
+    else this.render();
+  }
 
   changed(key, value) {
     this.config = { ...this.config, [key]: value };

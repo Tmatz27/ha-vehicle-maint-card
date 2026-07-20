@@ -30,7 +30,7 @@ from .const import (
 
 STORAGE_VERSION = 1
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.0.7"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.0.8"
 
 
 @dataclass
@@ -91,13 +91,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         odometer_entity = {**vehicle.entry.data, **vehicle.entry.options}[
             "odometer_entity"
         ]
-        odometer_state = hass.states.get(odometer_entity)
-        if odometer_state is None:
-            raise vol.Invalid("The configured odometer is unavailable")
+        mileage = call.data.get("mileage")
+        if mileage is None:
+            odometer_state = hass.states.get(odometer_entity)
+            if odometer_state is None:
+                raise vol.Invalid("The configured odometer is unavailable")
+            mileage = int(float(odometer_state.state))
         if definition.get("milestone"):
             vehicle.completed_milestones.add(key)
         else:
-            vehicle.last_completed[key] = int(float(odometer_state.state))
+            vehicle.last_completed[key] = mileage
             vehicle.extensions[key] = 0
         await vehicle.async_save()
 
@@ -139,7 +142,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         vol.Required("service"): vol.In(SERVICE_CATALOG),
     }
     hass.services.async_register(
-        DOMAIN, "log_maintenance", log_service, schema=vol.Schema(common)
+        DOMAIN,
+        "log_maintenance",
+        log_service,
+        schema=vol.Schema(
+            {
+                **common,
+                vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+            }
+        ),
     )
     hass.services.async_register(
         DOMAIN,

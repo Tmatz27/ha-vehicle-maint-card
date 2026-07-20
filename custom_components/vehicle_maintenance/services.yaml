@@ -12,6 +12,15 @@ log_maintenance:
       required: true
       selector:
         text:
+    mileage:
+      name: Completion mileage
+      description: Optional exact completion mileage; defaults to the current configured odometer.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
 
 extend_maintenance:
   name: Extend maintenance

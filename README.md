@@ -18,7 +18,7 @@ Vehicle Maintenance cards—one card per vehicle.
 
 > **Release requirement:** HACS installs published repository content, not an
 > unpushed local branch. Merge the integration changes to the repository's default
-> branch and publish a GitHub release tagged `v0.0.7` before attempting the HACS
+> branch and publish a GitHub release tagged `v0.0.8` before attempting the HACS
 > update. The release tag, integration manifest version, bundled card version, and
 > cache-busting URL must all match.
 
@@ -79,11 +79,11 @@ check the browser console for `VEHICLE-MAINT-CARD`. Its version should match the
 installed integration version.
 
 This repository follows the `0.0.x` release series. The card and integration
-versions are both `0.0.7`; keeping those values aligned also provides a predictable
+versions are both `0.0.8`; keeping those values aligned also provides a predictable
 frontend cache-busting URL.
 
 To verify the published release rather than a local checkout, confirm that the
-GitHub `v0.0.7` release contains
+GitHub `v0.0.8` release contains
 `custom_components/vehicle_maintenance/manifest.json` and
 `custom_components/vehicle_maintenance/www/vehicle-maint-card.js`.
 
@@ -124,6 +124,11 @@ The card provides a service selector and two actions:
 - **Extend maintenance** moves the next due mileage by 500, 1,000, or 2,000 miles
   without changing completion history.
 
+The **Completion mileage** field defaults to the current odometer but remains
+editable so maintenance can be logged at the exact mileage where the work was
+actually completed. **Use current** resynchronizes that field with the live
+odometer at any time.
+
 Both actions ask for confirmation. Selecting a maintenance row opens Home
 Assistant's standard entity details dialog.
 
@@ -160,3 +165,8 @@ Intervals are initial generic defaults and should be reviewed against the servic
 schedule appropriate for the configured vehicle. They are centralized in
 `custom_components/vehicle_maintenance/const.py` so future versions can expose
 per-vehicle interval editing without changing the entity contract.
+
+## Frontend dependencies
+
+No Mushroom, Auto Entities, card-mod, Template Entity Row, or other HACS frontend
+card is required. The bundled `vehicle-maint-card.js` is a standalone custom card.
