@@ -16,6 +16,12 @@ Vehicle Maintenance cards—one card per vehicle.
 
 ## Install with HACS
 
+> **Release requirement:** HACS installs published repository content, not an
+> unpushed local branch. Merge the integration changes to the repository's default
+> branch and publish a GitHub release tagged `v0.0.7` before attempting the HACS
+> update. The release tag, integration manifest version, bundled card version, and
+> cache-busting URL must all match.
+
 1. Remove any earlier custom-repository entry that points to `/tree/...` or
    `/packages`.
 2. Open **HACS → Integrations → Custom repositories**.
@@ -71,6 +77,15 @@ companion-app frontend cache.
 If the URL above returns JavaScript when opened directly but the card is absent,
 check the browser console for `VEHICLE-MAINT-CARD`. Its version should match the
 installed integration version.
+
+This repository follows the `0.0.x` release series. The card and integration
+versions are both `0.0.7`; keeping those values aligned also provides a predictable
+frontend cache-busting URL.
+
+To verify the published release rather than a local checkout, confirm that the
+GitHub `v0.0.7` release contains
+`custom_components/vehicle_maintenance/manifest.json` and
+`custom_components/vehicle_maintenance/www/vehicle-maint-card.js`.
 
 ## One repository or two?
 

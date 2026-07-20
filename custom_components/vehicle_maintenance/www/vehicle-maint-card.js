@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.5.1";
+const CARD_VERSION = "0.0.7";
 const DOMAIN = "vehicle_maintenance";
 
 const escapeHtml = (value) => String(value ?? "")
@@ -21,8 +21,27 @@ class VehicleMaintCard extends HTMLElement {
   }
 
   set hass(hass) {
+    const previousHass = this._hass;
     this._hass = hass;
-    this.render();
+    if (!previousHass || this.relevantStateChanged(previousHass, hass)) this.render();
+  }
+
+  relevantStateChanged(previousHass, nextHass) {
+    const mainEntity = this.config?.main_entity;
+    if (!mainEntity) return true;
+    const previousMain = previousHass.states[mainEntity];
+    const nextMain = nextHass.states[mainEntity];
+    if (previousMain !== nextMain) return true;
+    const entryId = nextMain?.attributes.entry_id;
+    if (!entryId) return false;
+    const previousEntities = Object.values(previousHass.states)
+      .filter((entity) => entity.attributes.entry_id === entryId);
+    const nextEntities = Object.values(nextHass.states)
+      .filter((entity) => entity.attributes.entry_id === entryId);
+    if (previousEntities.length !== nextEntities.length) return true;
+    return nextEntities.some(
+      (entity) => previousHass.states[entity.entity_id] !== entity
+    );
   }
 
   getCardSize() {
@@ -98,6 +117,8 @@ class VehicleMaintCard extends HTMLElement {
 
   render() {
     if (!this.config || !this._hass) return;
+    const existingSetup = this.querySelector(".setup");
+    if (existingSetup) this.setupOpen = existingSetup.open;
     const main = this.mainState();
     if (!this.config.main_entity) {
       this.innerHTML = `<ha-card><div class="message">Open the visual editor and select a vehicle.</div></ha-card>`;
@@ -157,9 +178,11 @@ class VehicleMaintCard extends HTMLElement {
       <h3>Maintenance</h3><div>${rows}</div>
       <div class="actions"><label>Selected service</label><div class="controls"><select class="service">${options}</select><select class="amount"><option value="500">500 mi</option><option value="1000">1,000 mi</option><option value="2000">2,000 mi</option></select></div>
         <div class="buttons"><button class="log">Log maintenance</button><button class="extend">Extend maintenance</button></div>
-        <details class="setup"><summary>Set maintenance history</summary><div class="setup-grid"><select class="setup-mode"><option value="last_completed">Last completed at mileage</option><option value="due_at">Due at mileage</option><option value="never_performed">Never performed</option></select><input class="setup-mileage" type="number" min="0" value="0" aria-label="Setup mileage"></div><button class="apply-setup">Apply history</button></details></div>
+        <details class="setup" ${this.setupOpen ? "open" : ""}><summary>Set maintenance history</summary><div class="setup-grid"><select class="setup-mode"><option value="last_completed">Last completed at mileage</option><option value="due_at">Due at mileage</option><option value="never_performed">Never performed</option></select><input class="setup-mileage" type="number" min="0" value="${Number(this.setupMileage || 0)}" aria-label="Setup mileage"></div><button class="apply-setup">Apply history</button></details></div>
     </ha-card>`;
     const amount = this.querySelector(".amount"); amount.value = String(this.extendMiles);
+    this.querySelector(".setup-mode").value = this.setupMode;
+    this.querySelector(".setup")?.addEventListener("toggle", (event) => { this.setupOpen = event.target.open; });
     this.querySelector(".service")?.addEventListener("change", (event) => { this.selectedService = event.target.value; });
     amount?.addEventListener("change", (event) => { this.extendMiles = Number(event.target.value); });
     this.querySelector(".log")?.addEventListener("click", () => this.callAction("log"));

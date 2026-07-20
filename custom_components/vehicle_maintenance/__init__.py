@@ -30,7 +30,7 @@ from .const import (
 
 STORAGE_VERSION = 1
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.5.1"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.0.7"
 
 
 @dataclass
