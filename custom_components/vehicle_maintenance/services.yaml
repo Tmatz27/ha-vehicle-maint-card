@@ -1,0 +1,73 @@
+log_maintenance:
+  name: Log maintenance
+  description: Mark a selected service complete at the current odometer mileage.
+  fields:
+    entry_id:
+      name: Vehicle entry
+      required: true
+      selector:
+        text:
+    service:
+      name: Service
+      required: true
+      selector:
+        text:
+
+extend_maintenance:
+  name: Extend maintenance
+  description: Move a selected service due mileage without changing its completion history.
+  fields:
+    entry_id:
+      name: Vehicle entry
+      required: true
+      selector:
+        text:
+    service:
+      name: Service
+      required: true
+      selector:
+        text:
+    miles:
+      name: Miles
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 10000
+          mode: box
+
+set_maintenance:
+  name: Set maintenance history
+  description: Initialize a service from its completion mileage, due mileage, or a never-performed baseline.
+  fields:
+    entry_id:
+      name: Vehicle entry
+      required: true
+      selector:
+        text:
+    service:
+      name: Service
+      required: true
+      selector:
+        text:
+    mode:
+      name: Setup method
+      required: true
+      selector:
+        select:
+          options:
+            - label: Last completed at mileage
+              value: last_completed
+            - label: Due at mileage
+              value: due_at
+            - label: Never performed
+              value: never_performed
+    mileage:
+      name: Mileage
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
