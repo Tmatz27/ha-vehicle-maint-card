@@ -1,0 +1,10 @@
+{
+  "domain": "vehicle_maintenance",
+  "name": "Vehicle Maintenance",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/OWNER/REPOSITORY",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "0.0.8"
+}
