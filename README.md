@@ -1,172 +1,87 @@
 # Vehicle Maintenance for Home Assistant
 
-A vehicle-neutral custom integration and Lovelace card for standardized,
-mileage-based vehicle maintenance. The repository contains no owner, location,
-device, registration, manufacturer, model, or notification-target information.
+A vehicle-neutral, mileage-only Home Assistant integration with a bundled mobile-first card. Each vehicle is an independent config entry and device; adding another vehicle requires no YAML, helpers, copied packages, or hand-built automations.
 
-## What changed
+## Features
 
-The project is now a Home Assistant **integration**, rather than a YAML package or
-a dashboard-only repository. The integration owns the standardized entities and
-persistent maintenance state. The bundled card selects one integration-created
-vehicle entity and discovers the rest automatically.
+- One authoritative odometer source with a persisted last-valid cache and live/cached status.
+- Explicit service records: Not set, Never performed, last completed, or due at a known mileage.
+- Per-vehicle service selection and editable intervals.
+- Recurring and mileage-milestone services.
+- Exact-mileage completion, factual due overrides, and independent **Remind me later** snoozes.
+- Configurable weekly summaries that ignore setup-required and actively snoozed services.
+- Effective odometer, summary, per-service, and aggregate due entities.
+- Standalone visual card; no Mushroom, Auto Entities, card-mod, or other HACS card is required.
+- Multiple vehicles and cards on the same dashboard.
 
-Each configured vehicle is independent, so a dashboard can contain multiple
-Vehicle Maintenance cards—one card per vehicle.
+## Review version
 
-## Install with HACS
+This work is prepared as `v0.1.0`. Do not publish a release or remove legacy package material until migration and live Home Assistant testing are complete. The manifest, card, frontend cache URL, and changelog use the same version.
 
-> **Release requirement:** HACS installs published repository content, not an
-> unpushed local branch. Merge the integration changes to the repository's default
-> branch and publish a GitHub release tagged `v0.0.8` before attempting the HACS
-> update. The release tag, integration manifest version, bundled card version, and
-> cache-busting URL must all match.
+## Installation for testing
 
-1. Remove any earlier custom-repository entry that points to `/tree/...` or
-   `/packages`.
-2. Open **HACS → Integrations → Custom repositories**.
-3. Add the repository root URL:
+1. Add the repository root to **HACS → Integrations → Custom repositories** as **Integration**.
+2. Install Vehicle Maintenance and restart Home Assistant.
+3. Add **Vehicle Maintenance** under **Settings → Devices & services**.
+4. Enter a vehicle display name, select its authoritative odometer, choose services, and configure notifications.
+5. Review the interval for every selected service in the second setup step.
+6. Add **Vehicle Maintenance Card** from the dashboard card picker and select the integration-created vehicle.
 
-   ```text
-   https://github.com/OWNER/REPOSITORY
-   ```
+The integration serves and loads `/vehicle-maintenance/vehicle-maint-card.js?v=0.1.0`. After an update, restart Home Assistant and clear the frontend cache if the console does not show `VEHICLE-MAINT-CARD v0.1.0`.
 
-4. Select **Integration** as the category and install **Vehicle Maintenance**.
-5. Restart Home Assistant.
+## Card behavior
 
-On startup, the integration loads its bundled card through Home Assistant's
-frontend component. It does not depend on a storage-mode Lovelace resource. After
-upgrading from an earlier release, restart Home Assistant and perform a full
-browser refresh. The card will then appear in the dashboard card picker as
-**Vehicle Maintenance Card**.
+The default **Due soon** view displays setup-required services plus unsnoozed overdue services and services due within 2,000 miles. **All maintenance** displays every selected service sorted by factual scheduled due mileage, including deferred and completed milestones.
 
-## Add a vehicle
+Tap a service row—not a disconnected global selector—to open its action panel:
 
-1. Open **Settings → Devices & services**.
-2. Select **Add integration** and search for **Vehicle Maintenance**.
-3. Enter a non-sensitive vehicle display name.
-4. Select the vehicle's existing odometer sensor.
-5. Select every maintenance service that should be tracked.
-6. Optionally enter a notify service such as `notify.notify` and choose the mileage
-   threshold for the Sunday 17:00 maintenance summary.
-7. Submit the form.
+- **Completed now at _odometer_ mi**
+- **Mileage when completed** for delayed entry
+- **Remind me later** for 500, 1,000, 2,000, or custom miles from the effective odometer
+- **Clear reminder**
+- Advanced explicit record initialization/correction
+- A separate information icon opens Home Assistant More Info
 
-The integration creates:
+Snoozing never changes last completion, interval, or scheduled due mileage. Completion clears both snooze and due override.
 
-- One main maintenance entity for card selection.
-- One miles-remaining sensor for every selected service.
-- A device that groups all entities belonging to that vehicle.
-- Persistent last-completed and extension values for each service.
-
-Open the integration's **Configure** dialog later to change the odometer or tracked
-services.
-
-## Card troubleshooting
-
-The integration automatically loads the bundled card and serves it at:
-
-```text
-/vehicle-maintenance/vehicle-maint-card.js
-```
-
-You should not need to add a dashboard resource manually. If an earlier version
-created a manual resource entry for this URL, remove that entry to prevent the
-card from being loaded twice. Then restart Home Assistant and clear the browser or
-companion-app frontend cache.
-
-If the URL above returns JavaScript when opened directly but the card is absent,
-check the browser console for `VEHICLE-MAINT-CARD`. Its version should match the
-installed integration version.
-
-This repository follows the `0.0.x` release series. The card and integration
-versions are both `0.0.8`; keeping those values aligned also provides a predictable
-frontend cache-busting URL.
-
-To verify the published release rather than a local checkout, confirm that the
-GitHub `v0.0.8` release contains
-`custom_components/vehicle_maintenance/manifest.json` and
-`custom_components/vehicle_maintenance/www/vehicle-maint-card.js`.
-
-## One repository or two?
-
-Only one repository is required. HACS installs this project as an **Integration**.
-The Python integration contains and serves the frontend JavaScript, and Home
-Assistant's frontend loader imports it globally. A separate HACS Dashboard
-repository would only be necessary if the card were intended to work without the
-integration.
-
-## Add and visually configure a card
-
-1. Edit a dashboard and select **Add card**.
-2. Choose **Vehicle Maintenance Card**.
-3. Select a vehicle from the visual editor.
-4. Optionally adjust the upcoming-mile boundary and default extension amount.
-5. Save the card.
-
-No entity IDs need to be entered in YAML. The card stores only the selected main
-entity and uses its integration entry ID to find that vehicle's service sensors.
-
-Minimal YAML remains available for advanced users:
+Minimal advanced YAML:
 
 ```yaml
 type: custom:vehicle-maint-card
-main_entity: sensor.my_vehicle_maintenance
-upcoming_miles: 6000
-extend_miles: 1000
+main_entity: sensor.REPLACE_maintenance
+upcoming_miles: 2000
 ```
 
-## Card workflow
+The visual editor is recommended and does not require manually finding entity IDs.
 
-The card provides a service selector and two actions:
+## Entities
 
-- **Log maintenance** records the current odometer as the service's completion
-  mileage and clears any prior extension.
-- **Extend maintenance** moves the next due mileage by 500, 1,000, or 2,000 miles
-  without changing completion history.
+Each vehicle device contains:
 
-The **Completion mileage** field defaults to the current odometer but remains
-editable so maintenance can be logged at the exact mileage where the work was
-actually completed. **Use current** resynchronizes that field with the live
-odometer at any time.
+- Effective odometer sensor, including `source: live`, `cached`, or `manual`
+- Maintenance summary with `setup_required`, `overdue`, `due_soon`, `okay`, or `unavailable`
+- One miles-remaining sensor per selected service with factual record and snooze attributes
+- Maintenance-due binary sensor for normal automations
 
-Both actions ask for confirmation. Selecting a maintenance row opens Home
-Assistant's standard entity details dialog.
+## Actions
 
-An expandable **Set maintenance history** section also supports the package-era
-setup workflows:
+- `vehicle_maintenance.log_maintenance`
+- `vehicle_maintenance.snooze_maintenance`
+- `vehicle_maintenance.clear_snooze`
+- `vehicle_maintenance.set_maintenance`
+- `vehicle_maintenance.reset_service`
+- `vehicle_maintenance.set_effective_odometer`
 
-- Last completed at a known mileage.
-- Due at a known mileage.
-- Never performed, with mileage zero retained as a valid baseline.
+See **Developer Tools → Actions** for fields and selectors.
 
-Milestone services from 30,000 through 200,000 miles can be selected during
-integration setup. Logging a milestone completes and hides it; resetting it to
-Never performed makes it active again. The optional weekly notification includes
-all selected recurring and incomplete milestone services within the configured
-threshold.
+## Notifications
 
-## Package functionality mapping
+Notifications are optional and configured per vehicle: enabled state, target action, threshold (default 1,500 miles), weekday (default Sunday), and time (default 17:00). Summaries use the effective cached odometer, sort by urgency, skip uninitialized and actively snoozed services, never send empty messages, and use a stable per-entry tag.
 
-| Previous package behavior | Integration behavior |
-| --- | --- |
-| Effective odometer template | User selects the authoritative odometer sensor. |
-| Miles-remaining templates | Integration creates standardized sensors. |
-| Selected service helper | Service selector is built into the card. |
-| Log script | **Log maintenance** card action and integration service. |
-| Extend script | **Extend maintenance** preserves completion history. |
-| Initial history setup | Expandable history workflow in the card. |
-| Milestone booleans | Persistent milestone completion state. |
-| Weekly mobile notification | Optional configurable notify service and threshold. |
-| Multiple copied packages | One config entry and one card per vehicle. |
+## Package migration
 
-## Default service intervals
+Follow the non-destructive checklist in [`docs/MIGRATION.md`](docs/MIGRATION.md). Keep the old package outside the active packages directory until values, milestones, cached odometer behavior, and notifications have been verified.
 
-Intervals are initial generic defaults and should be reviewed against the service
-schedule appropriate for the configured vehicle. They are centralized in
-`custom_components/vehicle_maintenance/const.py` so future versions can expose
-per-vehicle interval editing without changing the entity contract.
+## Data scope
 
-## Frontend dependencies
-
-No Mushroom, Auto Entities, card-mod, Template Entity Row, or other HACS frontend
-card is required. The bundled `vehicle-maint-card.js` is a standalone custom card.
+The integration preserves accurate current service records and last-completed mileage. It does not currently maintain or claim to maintain a complete maintenance event log.

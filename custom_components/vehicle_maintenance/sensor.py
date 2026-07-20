@@ -1,4 +1,4 @@
-"""Sensors created by Vehicle Maintenance."""
+"""Vehicle Maintenance sensor entities."""
 
 from __future__ import annotations
 
@@ -9,168 +9,213 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
     ATTR_ENTRY_ID,
     ATTR_SERVICE_KEY,
-    CONF_ODOMETER_ENTITY,
     CONF_SERVICES,
+    DEFAULT_UPCOMING_MILES,
     DOMAIN,
     SERVICE_CATALOG,
     SIGNAL_UPDATE,
+)
+from .manager import VehicleManager
+from .model import (
+    miles_remaining,
+    scheduled_due_mileage,
+    service_status,
+    snooze_active,
+    snooze_miles_remaining,
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-):
-    """Create the main vehicle entity and service sensors."""
-    selected = {**entry.data, **entry.options}[CONF_SERVICES]
+) -> None:
+    manager: VehicleManager = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        [VehicleSummarySensor(entry)]
-        + [MaintenanceSensor(hass, entry, key) for key in selected]
+        [EffectiveOdometerSensor(manager), VehicleSummarySensor(manager)]
+        + [MaintenanceSensor(manager, key) for key in manager.config[CONF_SERVICES]]
     )
 
 
 class VehicleEntity(SensorEntity):
-    """Common vehicle entity properties."""
-
     _attr_has_entity_name = True
 
-    def __init__(self, entry: ConfigEntry):
-        self.entry = entry
+    def __init__(self, manager: VehicleManager) -> None:
+        self.manager = manager
+        self.entry = manager.entry
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
+            identifiers={(DOMAIN, self.entry.entry_id)},
+            name=self.entry.title,
             manufacturer="Vehicle Maintenance",
         )
 
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entry_id: str) -> None:
+        if entry_id == self.entry.entry_id:
+            self.async_write_ha_state()
+
+
+class EffectiveOdometerSensor(VehicleEntity):
+    _attr_name = "Effective odometer"
+    _attr_icon = "mdi:road-variant"
+    _attr_native_unit_of_measurement = UnitOfLength.MILES
+
+    def __init__(self, manager: VehicleManager) -> None:
+        super().__init__(manager)
+        self._attr_unique_id = f"{self.entry.entry_id}_effective_odometer"
+
+    @property
+    def native_value(self) -> int | None:
+        return self.manager.effective_odometer
+
+    @property
+    def available(self) -> bool:
+        return self.manager.effective_odometer is not None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            ATTR_ENTRY_ID: self.entry.entry_id,
+            "source": self.manager.odometer_source,
+            "source_entity": self.manager.config["odometer_entity"],
+        }
+
 
 class VehicleSummarySensor(VehicleEntity):
-    """Main entity selected by the visual card editor."""
-
     _attr_name = "Maintenance"
     _attr_icon = "mdi:car-wrench"
 
-    def __init__(self, entry: ConfigEntry):
-        super().__init__(entry)
-        self._attr_unique_id = f"{entry.entry_id}_maintenance"
+    def __init__(self, manager: VehicleManager) -> None:
+        super().__init__(manager)
+        self._attr_unique_id = f"{self.entry.entry_id}_maintenance"
+
+    def _summary(self) -> tuple[str, dict]:
+        odometer = self.manager.effective_odometer
+        statuses = []
+        candidates = []
+        deferred = 0
+        for key in self.manager.config[CONF_SERVICES]:
+            record = self.manager.records[key]
+            definition = SERVICE_CATALOG[key]
+            milestone = bool(definition.get("milestone"))
+            status = service_status(
+                record,
+                odometer,
+                milestone=milestone,
+                due_soon_miles=DEFAULT_UPCOMING_MILES,
+            )
+            statuses.append(status)
+            remaining = (
+                None
+                if odometer is None
+                else miles_remaining(record, odometer, milestone=milestone)
+            )
+            if remaining is not None:
+                candidates.append((remaining, definition["name"]))
+            if odometer is not None and snooze_active(record, odometer):
+                deferred += 1
+                if status in ("overdue", "due_soon"):
+                    statuses[-1] = "deferred"
+        if odometer is None:
+            state = "unavailable"
+        elif "overdue" in statuses:
+            state = "overdue"
+        elif "due_soon" in statuses:
+            state = "due_soon"
+        elif "setup_required" in statuses:
+            state = "setup_required"
+        else:
+            state = "okay"
+        candidates.sort()
+        return state, {
+            "setup_required_count": statuses.count("setup_required"),
+            "overdue_count": statuses.count("overdue"),
+            "due_soon_count": statuses.count("due_soon"),
+            "deferred_count": deferred,
+            "next_service": candidates[0][1] if candidates else None,
+            "next_service_miles": candidates[0][0] if candidates else None,
+        }
 
     @property
-    def native_value(self):
-        return "ready"
+    def native_value(self) -> str:
+        return self._summary()[0]
 
     @property
-    def extra_state_attributes(self):
-        data = {**self.entry.data, **self.entry.options}
+    def extra_state_attributes(self) -> dict:
+        state, counts = self._summary()
         return {
             ATTR_ENTRY_ID: self.entry.entry_id,
             "integration": DOMAIN,
             "vehicle_name": self.entry.title,
-            "odometer_entity": data[CONF_ODOMETER_ENTITY],
-            "services": data[CONF_SERVICES],
+            "effective_odometer": self.manager.effective_odometer,
+            "odometer_source": self.manager.odometer_source,
+            "status": state,
+            **counts,
         }
 
 
 class MaintenanceSensor(VehicleEntity):
-    """Miles remaining for one recurring service."""
-
     _attr_native_unit_of_measurement = UnitOfLength.MILES
-    _attr_icon = "mdi:wrench-outline"
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, service_key: str):
-        super().__init__(entry)
-        self.hass = hass
+    def __init__(self, manager: VehicleManager, service_key: str) -> None:
+        super().__init__(manager)
         self.service_key = service_key
         definition = SERVICE_CATALOG[service_key]
         self._attr_name = definition["name"]
         self._attr_icon = definition["icon"]
-        self._attr_unique_id = f"{entry.entry_id}_{service_key}_miles_remaining"
+        self._attr_unique_id = f"{self.entry.entry_id}_{service_key}_miles_remaining"
 
     @property
-    def native_value(self):
-        vehicle = self.hass.data[DOMAIN][self.entry.entry_id]
-        data = {**self.entry.data, **self.entry.options}
-        odometer = self.hass.states.get(data[CONF_ODOMETER_ENTITY])
+    def native_value(self) -> int | None:
+        odometer = self.manager.effective_odometer
         if odometer is None:
             return None
-        try:
-            current_mileage = int(float(odometer.state))
-        except (TypeError, ValueError):
-            return None
-        definition = SERVICE_CATALOG[self.service_key]
-        if definition.get("milestone"):
-            if self.service_key in vehicle.completed_milestones:
-                return None
-            return definition["interval"] - current_mileage
-        return (
-            vehicle.last_completed.get(self.service_key, 0)
-            + definition["interval"]
-            + vehicle.extensions.get(self.service_key, 0)
-            - current_mileage
+        return miles_remaining(
+            self.manager.records[self.service_key],
+            odometer,
+            milestone=bool(SERVICE_CATALOG[self.service_key].get("milestone")),
         )
 
     @property
-    def available(self):
-        vehicle = self.hass.data[DOMAIN][self.entry.entry_id]
+    def extra_state_attributes(self) -> dict:
+        record = self.manager.records[self.service_key]
         definition = SERVICE_CATALOG[self.service_key]
-        if (
-            definition.get("milestone")
-            and self.service_key in vehicle.completed_milestones
-        ):
-            return False
-        data = {**self.entry.data, **self.entry.options}
-        state = self.hass.states.get(data[CONF_ODOMETER_ENTITY])
-        if state is None:
-            return False
-        try:
-            float(state.state)
-        except (TypeError, ValueError):
-            return False
-        return True
-
-    @property
-    def extra_state_attributes(self):
-        vehicle = self.hass.data[DOMAIN][self.entry.entry_id]
-        definition = SERVICE_CATALOG[self.service_key]
-        last = vehicle.last_completed.get(self.service_key, 0)
-        extension = vehicle.extensions.get(self.service_key, 0)
-        milestone = definition.get("milestone", False)
+        odometer = self.manager.effective_odometer
+        milestone = bool(definition.get("milestone"))
+        remaining = (
+            None
+            if odometer is None
+            else miles_remaining(record, odometer, milestone=milestone)
+        )
         return {
             ATTR_ENTRY_ID: self.entry.entry_id,
             ATTR_SERVICE_KEY: self.service_key,
             "service_name": definition["name"],
-            "interval_miles": definition["interval"],
-            "last_completed_mileage": last,
-            "extension_miles": extension,
-            "next_due_mileage": (
-                definition["interval"]
-                if milestone
-                else last + definition["interval"] + extension
+            "interval_miles": record.interval_miles,
+            "initialized": record.initialized,
+            "status": service_status(
+                record,
+                odometer,
+                milestone=milestone,
+                due_soon_miles=DEFAULT_UPCOMING_MILES,
             ),
+            "last_completed_mileage": record.last_completed_mileage,
+            "due_mileage_override": record.due_mileage_override,
+            "scheduled_due_mileage": scheduled_due_mileage(record, milestone=milestone),
+            "miles_remaining": remaining,
+            "snoozed_until_mileage": record.snoozed_until_mileage,
+            "snooze_miles_remaining": None
+            if odometer is None
+            else snooze_miles_remaining(record, odometer),
+            "deferred": False if odometer is None else snooze_active(record, odometer),
             "milestone": milestone,
-            "completed": self.service_key in vehicle.completed_milestones,
+            "milestone_completed": record.milestone_completed,
+            "milestone_completed_mileage": record.milestone_completed_mileage,
         }
-
-    async def async_added_to_hass(self):
-        data = {**self.entry.data, **self.entry.options}
-        self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_UPDATE, self._handle_update)
-        )
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass,
-                [data[CONF_ODOMETER_ENTITY]],
-                self._handle_odometer_update,
-            )
-        )
-
-    @callback
-    def _handle_update(self, entry_id):
-        if entry_id == self.entry.entry_id:
-            self.async_write_ha_state()
-
-    @callback
-    def _handle_odometer_update(self, event):
-        self.async_write_ha_state()

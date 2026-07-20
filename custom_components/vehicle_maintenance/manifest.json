@@ -3,8 +3,8 @@
   "name": "Vehicle Maintenance",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/OWNER/REPOSITORY",
+  "documentation": "https://github.com/Tmatz27/ha-vehicle-maint-card",
   "iot_class": "local_polling",
   "requirements": [],
-  "version": "0.0.8"
+  "version": "0.1.0"
 }

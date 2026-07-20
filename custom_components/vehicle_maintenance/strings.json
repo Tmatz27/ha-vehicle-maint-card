@@ -1,30 +1,14 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Add a vehicle",
-        "description": "Select the vehicle odometer and maintenance services to track.",
-        "data": {
-          "vehicle_name": "Vehicle name",
-          "odometer_entity": "Odometer sensor",
-          "services": "Services to track",
-          "notify_service": "Optional notify service",
-          "notify_threshold": "Notification threshold (miles)"
-        }
-      }
+      "user": {"title": "Add a vehicle", "description": "Choose the odometer, tracked services, and notification settings.", "data": {"vehicle_name": "Vehicle display name", "odometer_entity": "Authoritative odometer sensor", "services": "Services to track", "notify_enabled": "Enable weekly summary", "notify_service": "Notification action (for example notify.notify)", "notify_threshold": "Notification threshold (miles)", "notify_weekday": "Notification day", "notify_time": "Notification time"}},
+      "intervals": {"title": "Review service intervals", "description": "Review every interval for {vehicle}. These values are stored only for this vehicle."}
     }
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Vehicle maintenance options",
-        "data": {
-          "odometer_entity": "Odometer sensor",
-          "services": "Services to track",
-          "notify_service": "Optional notify service",
-          "notify_threshold": "Notification threshold (miles)"
-        }
-      }
+      "init": {"title": "Vehicle maintenance options", "description": "Update the vehicle, source, services, and notification schedule.", "data": {"vehicle_name": "Vehicle display name", "odometer_entity": "Authoritative odometer sensor", "services": "Services to track", "notify_enabled": "Enable weekly summary", "notify_service": "Notification action", "notify_threshold": "Notification threshold (miles)", "notify_weekday": "Notification day", "notify_time": "Notification time"}},
+      "intervals": {"title": "Review service intervals", "description": "Review every interval for {vehicle}."}
     }
   }
 }

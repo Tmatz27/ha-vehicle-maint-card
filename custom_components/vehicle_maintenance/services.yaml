@@ -1,82 +1,79 @@
 log_maintenance:
   name: Log maintenance
-  description: Mark a selected service complete at the current odometer mileage.
+  description: Complete a service at the effective odometer or an exact supplied mileage.
   fields:
-    entry_id:
-      name: Vehicle entry
+    entry_id: &entry
+      name: Vehicle entry ID
       required: true
-      selector:
-        text:
-    service:
-      name: Service
+      selector: {text: {}}
+    service: &service
+      name: Service key
       required: true
-      selector:
-        text:
+      selector: {text: {}}
     mileage:
-      name: Completion mileage
-      description: Optional exact completion mileage; defaults to the current configured odometer.
+      name: Mileage when completed
       required: false
-      selector:
-        number:
-          min: 0
-          max: 1000000
-          mode: box
+      selector: {number: {min: 0, max: 1000000, mode: box}}
 
-extend_maintenance:
-  name: Extend maintenance
-  description: Move a selected service due mileage without changing its completion history.
+snooze_maintenance:
+  name: Remind me later
+  description: Suppress reminders until a target measured from the effective odometer without changing factual service history.
   fields:
-    entry_id:
-      name: Vehicle entry
-      required: true
-      selector:
-        text:
-    service:
-      name: Service
-      required: true
-      selector:
-        text:
+    entry_id: *entry
+    service: *service
     miles:
-      name: Miles
-      required: true
-      selector:
-        number:
-          min: 1
-          max: 10000
-          mode: box
+      name: Check again in miles
+      required: false
+      selector: {number: {min: 1, max: 100000, mode: box}}
+    until_mileage:
+      name: Explicit reminder mileage
+      required: false
+      selector: {number: {min: 1, max: 1000000, mode: box}}
+
+clear_snooze:
+  name: Clear reminder
+  fields:
+    entry_id: *entry
+    service: *service
 
 set_maintenance:
-  name: Set maintenance history
-  description: Initialize a service from its completion mileage, due mileage, or a never-performed baseline.
+  name: Set maintenance record
+  description: Initialize or correct a service without fabricating completion history.
   fields:
-    entry_id:
-      name: Vehicle entry
-      required: true
-      selector:
-        text:
-    service:
-      name: Service
-      required: true
-      selector:
-        text:
+    entry_id: *entry
+    service: *service
     mode:
-      name: Setup method
+      name: Record state
       required: true
       selector:
         select:
           options:
-            - label: Last completed at mileage
-              value: last_completed
-            - label: Due at mileage
-              value: due_at
-            - label: Never performed
-              value: never_performed
+            - {label: Not set, value: not_set}
+            - {label: Never performed, value: never_performed}
+            - {label: Last completed at mileage, value: last_completed}
+            - {label: Due at known mileage, value: due_at}
     mileage:
       name: Mileage
       required: false
-      default: 0
-      selector:
-        number:
-          min: 0
-          max: 1000000
-          mode: box
+      selector: {number: {min: 0, max: 1000000, mode: box}}
+
+reset_service:
+  name: Reset service
+  description: Return a service, including a milestone, to Not set.
+  fields:
+    entry_id: *entry
+    service: *service
+
+set_effective_odometer:
+  name: Set cached odometer
+  description: Explicitly correct the persisted effective odometer when a source is stale or has decreased legitimately.
+  fields:
+    entry_id: *entry
+    mileage:
+      name: Mileage
+      required: true
+      selector: {number: {min: 0, max: 1000000, mode: box}}
+    allow_decrease:
+      name: Allow decrease
+      default: false
+      selector: {boolean: {}}

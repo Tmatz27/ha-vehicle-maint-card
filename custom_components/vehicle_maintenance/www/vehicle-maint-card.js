@@ -1,270 +1,199 @@
-const CARD_VERSION = "0.0.8";
+const CARD_VERSION = "0.1.0";
 const DOMAIN = "vehicle_maintenance";
 
-const escapeHtml = (value) => String(value ?? "")
+const esc = (value) => String(value ?? "")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
   .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+const number = (value) => value === null || value === undefined ? "Not set" : Number(value).toLocaleString();
 
 class VehicleMaintCard extends HTMLElement {
+  static async getConfigElement() { return document.createElement("vehicle-maint-card-editor"); }
+  static getStubConfig() { return { upcoming_miles: 2000 }; }
+
   constructor() {
     super();
-    this.addEventListener("focusout", () => {
-      setTimeout(() => {
-        if (this.pendingRender && !this.matches(":focus-within")) {
-          this.pendingRender = false;
-          this.render();
-        }
-      }, 0);
+    this.view = "due";
+    this.interacting = false;
+    this.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("select,input,button,summary")) this.interacting = true;
     });
-  }
-
-  static async getConfigElement() {
-    return document.createElement("vehicle-maint-card-editor");
-  }
-
-  static getStubConfig() {
-    return {};
+    this.addEventListener("focusout", () => setTimeout(() => {
+      if (!this.matches(":focus-within")) this.interacting = false;
+      if (this.pendingRender && !this.interacting) { this.pendingRender = false; this.render(); }
+    }, 250));
   }
 
   setConfig(config) {
-    this.config = { extend_miles: 1000, upcoming_miles: 6000, ...config };
-    this.selectedService ||= "";
+    this.config = { upcoming_miles: 2000, snooze_miles: 1000, ...config };
     this.render();
   }
 
   set hass(hass) {
-    const previousHass = this._hass;
     this._hass = hass;
-    if (!previousHass || this.relevantStateChanged(previousHass, hass)) {
-      if (this.matches(":focus-within")) {
-        this.pendingRender = true;
-      } else {
-        this.render();
-      }
-    }
+    if (this.interacting) this.pendingRender = true;
+    else this.render();
   }
 
-  relevantStateChanged(previousHass, nextHass) {
-    const mainEntity = this.config?.main_entity;
-    if (!mainEntity) return true;
-    const previousMain = previousHass.states[mainEntity];
-    const nextMain = nextHass.states[mainEntity];
-    if (previousMain !== nextMain) return true;
-    const entryId = nextMain?.attributes.entry_id;
-    if (!entryId) return false;
-    const previousEntities = Object.values(previousHass.states)
-      .filter((entity) => entity.attributes.entry_id === entryId);
-    const nextEntities = Object.values(nextHass.states)
-      .filter((entity) => entity.attributes.entry_id === entryId);
-    if (previousEntities.length !== nextEntities.length) return true;
-    return nextEntities.some(
-      (entity) => previousHass.states[entity.entity_id] !== entity
-    );
-  }
+  getCardSize() { return Math.max(4, this.services().length + 2); }
+  main() { return this._hass?.states[this.config?.main_entity]; }
+  odometer() { return Number(this.main()?.attributes.effective_odometer); }
+  entryId() { return this.main()?.attributes.entry_id; }
 
-  getCardSize() {
-    return Math.max(4, this.serviceEntities().length + 3);
-  }
-
-  mainState() {
-    return this._hass?.states[this.config?.main_entity];
-  }
-
-  serviceEntities() {
-    const main = this.mainState();
-    if (!main || !this._hass) return [];
-    const entryId = main.attributes.entry_id;
+  services() {
+    const entryId = this.entryId();
+    if (!entryId || !this._hass) return [];
     return Object.values(this._hass.states)
       .filter((entity) => entity.attributes.entry_id === entryId && entity.attributes.service_key)
-      .sort((left, right) => {
-        const leftValue = Number(left.state);
-        const rightValue = Number(right.state);
-        return (Number.isFinite(leftValue) ? leftValue : Infinity)
-          - (Number.isFinite(rightValue) ? rightValue : Infinity);
+      .sort((a, b) => {
+        const aDue = a.attributes.scheduled_due_mileage;
+        const bDue = b.attributes.scheduled_due_mileage;
+        return (aDue ?? Number.MAX_SAFE_INTEGER) - (bDue ?? Number.MAX_SAFE_INTEGER);
       });
   }
 
-  status(miles) {
-    if (miles < 0) return "overdue";
-    if (miles <= 500) return "due";
-    if (miles <= 1500) return "soon";
-    if (miles <= this.config.upcoming_miles) return "upcoming";
-    return "okay";
+  showToast(message) {
+    this.dispatchEvent(new CustomEvent("hass-notification", { bubbles: true, composed: true, detail: { message } }));
   }
 
-  mileageText(miles) {
-    const value = Math.abs(miles).toLocaleString();
-    if (miles < 0) return `${value} mi overdue`;
-    if (miles === 0) return "Due now";
-    return `${value} mi remaining`;
+  moreInfo(entityId) {
+    this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId } }));
   }
 
-  openMoreInfo(entityId) {
-    const event = new Event("hass-more-info", { bubbles: true, composed: true });
-    event.detail = { entityId };
-    this.dispatchEvent(event);
-  }
-
-  async callAction(action) {
-    const main = this.mainState();
-    if (!main || !this.selectedService) return;
-    const selected = this.serviceEntities().find(
-      (entity) => entity.attributes.service_key === this.selectedService
-    );
-    const serviceName = selected?.attributes.service_name || "the selected service";
-    const prompt = action === "log"
-      ? `Log ${serviceName} at the current odometer mileage?`
-      : action === "extend"
-        ? `Extend ${serviceName} by ${Number(this.extendMiles).toLocaleString()} miles?`
-        : `Apply the selected history setup to ${serviceName}?`;
-    if (!window.confirm(prompt)) return;
-    const service = action === "log"
-      ? "log_maintenance"
-      : action === "extend" ? "extend_maintenance" : "set_maintenance";
-    const data = {
-      entry_id: main.attributes.entry_id,
-      service: this.selectedService,
-    };
-    if (action === "extend") data.miles = Number(this.extendMiles);
-    if (action === "log") data.mileage = Number(this.completionMileage);
-    if (action === "setup") {
-      data.mode = this.setupMode;
-      data.mileage = Number(this.setupMileage || 0);
+  async call(service, data, success) {
+    try {
+      await this._hass.callService(DOMAIN, service, { entry_id: this.entryId(), ...data });
+      this.error = "";
+      this.selectedService = null;
+      this.interacting = false;
+      this.showToast(success);
+      this.render();
+    } catch (error) {
+      this.error = error?.message || String(error);
+      this.render();
     }
-    await this._hass.callService(DOMAIN, service, data);
+  }
+
+  selectService(key) {
+    this.selectedService = key;
+    const entity = this.services().find((item) => item.attributes.service_key === key);
+    this.completionMileage = this.odometer();
+    const attributes = entity?.attributes || {};
+    this.setupMode = !attributes.initialized ? "not_set" : attributes.due_mileage_override != null ? "due_at" : "last_completed";
+    this.setupMileage = attributes.due_mileage_override ?? attributes.last_completed_mileage ?? this.odometer();
+    this.snoozeChoice = String(this.config.snooze_miles);
+    this.customSnooze = this.config.snooze_miles;
+    this.error = "";
+    this.render();
+  }
+
+  serviceRows(services) {
+    if (!services.length) return `<div class="empty">Nothing to show in this view.</div>`;
+    return services.map((entity) => {
+      const a = entity.attributes;
+      const remaining = a.miles_remaining;
+      const status = a.status || "setup_required";
+      const deferred = a.deferred;
+      let human = status === "setup_required" ? "Setup required"
+        : status === "completed" ? `Completed at ${number(a.milestone_completed_mileage)} mi`
+        : remaining < 0 ? `${number(Math.abs(remaining))} mi overdue`
+        : `${number(remaining)} mi remaining`;
+      if (deferred) human = `Deferred until ${number(a.snoozed_until_mileage)} mi`;
+      return `<div class="row ${esc(status)} ${deferred ? "deferred" : ""}">
+        <button class="row-main" data-service="${esc(a.service_key)}">
+          <span class="service-icon"><ha-icon icon="${esc(a.icon || entity.attributes.icon || "mdi:wrench-outline")}"></ha-icon></span>
+          <span class="row-copy"><b>${esc(a.service_name)}</b><small>${esc(human)}</small></span>
+          <span class="row-value">${status === "setup_required" ? "SETUP" : deferred ? "LATER" : remaining === null ? "—" : number(remaining)}</span>
+        </button>
+        <button class="info" data-info="${esc(entity.entity_id)}" aria-label="Entity information"><ha-icon icon="mdi:information-outline"></ha-icon></button>
+      </div>`;
+    }).join("");
+  }
+
+  actionPanel() {
+    if (!this.selectedService) return "";
+    const entity = this.services().find((item) => item.attributes.service_key === this.selectedService);
+    if (!entity) return "";
+    const a = entity.attributes;
+    const odo = this.odometer();
+    const interval = Number(a.interval_miles || 0);
+    const nextAfterCompletion = a.milestone ? null : Number(this.completionMileage) + interval;
+    const snoozeAmount = this.snoozeChoice === "custom" ? Number(this.customSnooze) : Number(this.snoozeChoice);
+    const snoozeTarget = odo + snoozeAmount;
+    return `<div class="backdrop"><section class="panel" role="dialog" aria-modal="true">
+      <header><div><small>Maintenance action</small><h2>${esc(a.service_name)}</h2></div><button class="close" aria-label="Close">×</button></header>
+      <div class="facts"><span>Odometer <b>${number(odo)} mi</b></span><span>Last completed <b>${number(a.last_completed_mileage)}${a.last_completed_mileage == null ? "" : " mi"}</b></span><span>Scheduled due <b>${number(a.scheduled_due_mileage)}${a.scheduled_due_mileage == null ? "" : " mi"}</b></span></div>
+      ${this.error ? `<div class="error">${esc(this.error)}</div>` : ""}
+      <button class="primary complete-now">Completed now at ${number(odo)} mi</button>
+      <label>Mileage when completed</label><div class="input-action"><input class="completion" type="number" min="0" value="${Number(this.completionMileage)}"><button class="complete-other">Complete</button></div>
+      <small class="result">Log ${esc(a.service_name)} at ${number(this.completionMileage)} mi · ${a.milestone ? "Milestone will be marked completed" : `Next scheduled service: ${number(nextAfterCompletion)} mi`}</small>
+      ${a.initialized ? `<hr><label>Remind me later · Check again in</label><div class="input-action"><select class="snooze"><option value="500">500 mi</option><option value="1000">1,000 mi</option><option value="2000">2,000 mi</option><option value="custom">Custom</option></select><input class="custom-snooze" type="number" min="1" value="${Number(this.customSnooze)}" ${this.snoozeChoice === "custom" ? "" : "hidden"}></div><button class="secondary snooze-action">Remind me again at ${number(snoozeTarget)} mi</button><small>This will not mark the service completed or change its scheduled due mileage.</small>${a.snoozed_until_mileage != null ? `<button class="text clear-snooze">Clear reminder</button>` : ""}` : `<small>Initialize or complete this service before setting a reminder.</small>`}
+      <details><summary>Advanced record editing</summary><label>Record state</label><select class="setup-mode"><option value="not_set">Not set</option><option value="never_performed">Never performed</option><option value="last_completed">Last completed at mileage</option><option value="due_at">Due at known mileage</option></select><label>Mileage</label><input class="setup-mileage" type="number" min="0" value="${Number(this.setupMileage || 0)}"><button class="secondary apply-setup">Save record</button></details>
+    </section></div>`;
   }
 
   render() {
     if (!this.config || !this._hass) return;
-    const existingSetup = this.querySelector(".setup");
-    if (existingSetup) this.setupOpen = existingSetup.open;
-    const main = this.mainState();
-    if (!this.config.main_entity) {
-      this.innerHTML = `<ha-card><div class="message">Open the visual editor and select a vehicle.</div></ha-card>`;
+    const main = this.main();
+    if (!this.config.main_entity || !main) {
+      this.innerHTML = `<ha-card><div class="empty">Open the visual editor and select a Vehicle Maintenance entry.</div></ha-card>`;
       return;
     }
-    if (!main) {
-      this.innerHTML = `<ha-card><div class="message">Vehicle entity unavailable: ${escapeHtml(this.config.main_entity)}</div></ha-card>`;
-      return;
-    }
-
-    const entities = this.serviceEntities();
-    const numericEntities = entities.filter((entity) => Number.isFinite(Number(entity.state)));
-    if (!this.selectedService || !entities.some((entity) => entity.attributes.service_key === this.selectedService)) {
-      this.selectedService = entities[0]?.attributes.service_key || "";
-    }
-    this.extendMiles = this.extendMiles || this.config.extend_miles;
-    this.setupMode ||= "last_completed";
-    this.setupMileage ??= 0;
-    const visible = numericEntities.filter((entity) => Number(entity.state) <= this.config.upcoming_miles);
-    const counts = numericEntities.reduce((result, entity) => {
-      result[this.status(Number(entity.state))] += 1;
-      return result;
-    }, { overdue: 0, due: 0, soon: 0, upcoming: 0, okay: 0 });
-    const odometerEntity = main.attributes.odometer_entity;
-    const odometerState = this._hass.states[odometerEntity];
-    const odometer = odometerState && Number.isFinite(Number(odometerState.state))
-      ? `${Number(odometerState.state).toLocaleString()} mi`
-      : "Odometer unavailable";
-    const odometerValue = odometerState && Number.isFinite(Number(odometerState.state))
-      ? Math.trunc(Number(odometerState.state))
-      : 0;
-    if (!this.completionMileageDirty) this.completionMileage = odometerValue;
-    const options = entities.map((entity) => `
-      <option value="${escapeHtml(entity.attributes.service_key)}" ${entity.attributes.service_key === this.selectedService ? "selected" : ""}>
-        ${escapeHtml(entity.attributes.service_name || entity.attributes.friendly_name)}
-      </option>`).join("");
-    const rows = visible.length ? visible.map((entity) => {
-      const miles = Number(entity.state);
-      const state = this.status(miles);
-      return `<button class="row" data-entity="${escapeHtml(entity.entity_id)}">
-        <span class="icon ${state}"><ha-icon icon="${escapeHtml(entity.attributes.icon || "mdi:wrench-outline")}"></ha-icon></span>
-        <span class="copy"><b>${escapeHtml(entity.attributes.service_name || entity.attributes.friendly_name)}</b>
-          <small>Due at ${Number(entity.attributes.next_due_mileage).toLocaleString()} mi</small></span>
-        <span class="miles ${state}">${escapeHtml(this.mileageText(miles))}</span>
-      </button>`;
-    }).join("") : `<div class="message">No maintenance is due within ${this.config.upcoming_miles.toLocaleString()} mi.</div>`;
-
+    const all = this.services();
+    const setup = all.filter((entity) => entity.attributes.status === "setup_required");
+    const deferred = all.filter((entity) => entity.attributes.deferred);
+    const due = all.filter((entity) => !entity.attributes.deferred && entity.attributes.status !== "setup_required" && entity.attributes.status !== "completed" && Number(entity.attributes.miles_remaining) <= this.config.upcoming_miles);
+    const shown = this.view === "all" ? all : [...setup, ...due];
     this.innerHTML = `<style>
-      vehicle-maint-card { display:block } ha-card { overflow:hidden; border-radius:24px }
-      .hero { display:flex; align-items:center; gap:14px; padding:21px; background:linear-gradient(135deg,color-mix(in srgb,var(--primary-color) 16%,var(--ha-card-background)),var(--ha-card-background) 70%) }
-      .car { display:grid;place-items:center;width:52px;height:52px;border-radius:18px;color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 18%,transparent) }.car ha-icon{--mdc-icon-size:30px}
-      .title { flex:1 }.title b,.title small{display:block}.title b{font-size:1.25rem}.title small{margin-top:3px;color:var(--secondary-text-color)}
-      .chips{display:flex;gap:8px;padding:13px 18px;border-bottom:1px solid var(--divider-color);overflow:auto}.chip{white-space:nowrap;padding:6px 10px;border-radius:14px;background:var(--secondary-background-color);font-size:.82rem;font-weight:600}.overdue{color:var(--error-color)}.due{color:var(--warning-color,#ff9800)}.soon{color:#d89b00}.upcoming{color:var(--primary-color)}.okay{color:var(--success-color,#4caf50)}
-      h3{margin:0;padding:16px 20px 8px}.row{display:flex;align-items:center;gap:13px;width:100%;min-height:66px;padding:10px 18px;border:0;border-top:1px solid var(--divider-color);color:var(--primary-text-color);background:transparent;text-align:left;cursor:pointer}.row:hover{background:color-mix(in srgb,var(--primary-color) 7%,transparent)}
-      .icon{display:grid;place-items:center;flex:0 0 38px;height:38px;border-radius:13px;background:var(--secondary-background-color)}.copy{display:flex;flex:1;min-width:0;flex-direction:column}.copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.copy small{margin-top:2px;color:var(--secondary-text-color)}.miles{font-size:.86rem;font-weight:600;text-align:right}
-      .actions{margin:14px;padding:14px;border-radius:18px;background:var(--secondary-background-color)}.actions label{display:block;margin-bottom:6px;color:var(--secondary-text-color);font-size:.8rem}.controls,.mileage-controls{display:grid;grid-template-columns:minmax(0,1fr) 100px;gap:8px}.controls select,.mileage-controls input,.setup-grid select,.setup-grid input{box-sizing:border-box;width:100%;min-height:42px;padding:0 10px;border:1px solid var(--divider-color);border-radius:12px;color:var(--primary-text-color);background:var(--card-background-color)}.mileage-label{margin-top:10px}.sync-mileage{border:0;border-radius:12px;color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 15%,transparent);font-weight:600;cursor:pointer}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.buttons button,.setup button{min-height:42px;border:0;border-radius:13px;font-weight:600;cursor:pointer}.log{color:var(--text-primary-color);background:var(--primary-color)}.extend,.setup button{color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 15%,transparent)}.setup{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color)}.setup summary{cursor:pointer;font-weight:600}.setup-grid{display:grid;grid-template-columns:1fr 110px;gap:8px;margin-top:10px}.setup button{width:100%;margin-top:8px}.message{padding:24px;text-align:center;color:var(--secondary-text-color)}
-      @media(max-width:420px){.miles{max-width:95px}.hero{padding:18px}.controls{grid-template-columns:1fr 90px}}
-    </style><ha-card>
-      <div class="hero"><span class="car"><ha-icon icon="mdi:car"></ha-icon></span><span class="title"><b>${escapeHtml(main.attributes.vehicle_name || main.attributes.friendly_name)}</b><small>${escapeHtml(odometer)}</small></span></div>
-      <div class="chips"><span class="chip overdue">${counts.overdue} overdue</span><span class="chip due">${counts.due} due</span><span class="chip soon">${counts.soon + counts.upcoming} upcoming</span></div>
-      <h3>Maintenance</h3><div>${rows}</div>
-      <div class="actions"><label>Selected service</label><div class="controls"><select class="service">${options}</select><select class="amount"><option value="500">500 mi</option><option value="1000">1,000 mi</option><option value="2000">2,000 mi</option></select></div>
-        <label class="mileage-label">Completion mileage</label><div class="mileage-controls"><input class="completion-mileage" type="number" min="0" value="${Number(this.completionMileage || 0)}"><button class="sync-mileage">Use current</button></div>
-        <div class="buttons"><button class="log">Log maintenance</button><button class="extend">Extend maintenance</button></div>
-        <details class="setup" ${this.setupOpen ? "open" : ""}><summary>Set maintenance history</summary><div class="setup-grid"><select class="setup-mode"><option value="last_completed">Last completed at mileage</option><option value="due_at">Due at mileage</option><option value="never_performed">Never performed</option></select><input class="setup-mileage" type="number" min="0" value="${Number(this.setupMileage || 0)}" aria-label="Setup mileage"></div><button class="apply-setup">Apply history</button></details></div>
-    </ha-card>`;
-    const amount = this.querySelector(".amount"); amount.value = String(this.extendMiles);
-    this.querySelector(".setup-mode").value = this.setupMode;
-    this.querySelector(".setup")?.addEventListener("toggle", (event) => { this.setupOpen = event.target.open; });
-    this.querySelector(".service")?.addEventListener("change", (event) => { this.selectedService = event.target.value; });
-    this.querySelector(".completion-mileage")?.addEventListener("input", (event) => { this.completionMileage = Number(event.target.value); this.completionMileageDirty = true; });
-    this.querySelector(".sync-mileage")?.addEventListener("click", () => { this.completionMileage = odometerValue; this.completionMileageDirty = false; this.querySelector(".completion-mileage").value = String(odometerValue); });
-    amount?.addEventListener("change", (event) => { this.extendMiles = Number(event.target.value); });
-    this.querySelector(".log")?.addEventListener("click", () => this.callAction("log"));
-    this.querySelector(".extend")?.addEventListener("click", () => this.callAction("extend"));
-    this.querySelector(".setup-mode")?.addEventListener("change", (event) => { this.setupMode = event.target.value; });
-    this.querySelector(".setup-mileage")?.addEventListener("change", (event) => { this.setupMileage = Number(event.target.value); });
-    this.querySelector(".apply-setup")?.addEventListener("click", () => this.callAction("setup"));
-    this.querySelectorAll(".row").forEach((row) => row.addEventListener("click", () => this.openMoreInfo(row.dataset.entity)));
+      vehicle-maint-card{display:block}ha-card{overflow:hidden;border-radius:24px}.hero{display:flex;gap:14px;align-items:center;padding:21px;background:linear-gradient(135deg,color-mix(in srgb,var(--primary-color) 16%,var(--ha-card-background)),var(--ha-card-background) 70%)}.car{display:grid;place-items:center;width:52px;height:52px;border-radius:18px;color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 18%,transparent)}.title{flex:1}.title b,.title small{display:block}.title b{font-size:1.25rem}.title small{color:var(--secondary-text-color);margin-top:3px}.chips,.views{display:flex;gap:8px;padding:12px 18px;border-bottom:1px solid var(--divider-color)}.chip{padding:6px 10px;border-radius:14px;background:var(--secondary-background-color);font-size:.82rem;font-weight:600}.views button{flex:1;border:0;border-radius:12px;padding:9px;background:transparent;color:var(--secondary-text-color);font-weight:600}.views button.active{background:color-mix(in srgb,var(--primary-color) 16%,transparent);color:var(--primary-color)}h3{margin:0;padding:15px 18px 8px}.row{display:flex;border-top:1px solid var(--divider-color)}.row-main{display:flex;align-items:center;gap:12px;min-height:66px;flex:1;min-width:0;padding:9px 10px 9px 18px;border:0;background:transparent;color:var(--primary-text-color);text-align:left}.service-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:13px;background:var(--secondary-background-color);color:var(--primary-color)}.row-copy{display:flex;flex:1;min-width:0;flex-direction:column}.row-copy small{color:var(--secondary-text-color);margin-top:2px}.row-value{font-size:.8rem;font-weight:700}.overdue .row-value{color:var(--error-color)}.due_soon .row-value{color:var(--warning-color,#ff9800)}.setup_required .row-value{color:#d89b00}.deferred .row-value{color:var(--primary-color)}.info{width:45px;border:0;background:transparent;color:var(--secondary-text-color)}.empty{padding:25px;text-align:center;color:var(--secondary-text-color)}.backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center;background:#0008}.panel{box-sizing:border-box;width:min(100%,600px);max-height:92vh;overflow:auto;padding:20px;border-radius:24px 24px 0 0;background:var(--card-background-color);color:var(--primary-text-color)}.panel header{display:flex;justify-content:space-between}.panel h2{margin:2px 0 14px}.close{border:0;background:transparent;color:var(--primary-text-color);font-size:2rem}.facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}.facts span{padding:9px;border-radius:12px;background:var(--secondary-background-color);font-size:.82rem}.facts b{display:block;margin-top:3px}.panel label{display:block;margin:12px 0 5px;color:var(--secondary-text-color);font-size:.82rem}.panel input,.panel select{box-sizing:border-box;width:100%;min-height:44px;padding:0 10px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}.input-action{display:flex;gap:8px}.input-action button{min-width:105px}.primary,.secondary,.text{width:100%;min-height:44px;margin-top:10px;border:0;border-radius:13px;font-weight:700}.primary{background:var(--primary-color);color:var(--text-primary-color)}.secondary{background:color-mix(in srgb,var(--primary-color) 16%,transparent);color:var(--primary-color)}.text{background:transparent;color:var(--primary-color)}.result,.panel>small{display:block;margin-top:7px;color:var(--secondary-text-color)}.panel hr{border:0;border-top:1px solid var(--divider-color);margin:18px 0}.panel details{margin-top:15px;padding-top:12px;border-top:1px solid var(--divider-color)}.panel summary{font-weight:700}.error{padding:10px;border-radius:10px;background:color-mix(in srgb,var(--error-color) 18%,transparent);color:var(--error-color)}
+    </style><ha-card><div class="hero"><span class="car"><ha-icon icon="mdi:car"></ha-icon></span><span class="title"><b>${esc(main.attributes.vehicle_name || main.attributes.friendly_name)}</b><small>${number(main.attributes.effective_odometer)} mi · ${esc(main.attributes.odometer_source || "unavailable")}</small></span></div><div class="chips"><span class="chip">${setup.length} setup</span><span class="chip">${main.attributes.overdue_count || 0} overdue</span><span class="chip">${main.attributes.due_soon_count || 0} due soon</span><span class="chip">${deferred.length} deferred</span></div><div class="views"><button data-view="due" class="${this.view === "due" ? "active" : ""}">Due soon</button><button data-view="all" class="${this.view === "all" ? "active" : ""}">All maintenance</button></div><h3>${this.view === "due" ? "Needs attention" : "All maintenance"}</h3>${this.serviceRows(shown)}</ha-card>${this.actionPanel()}`;
+    this.querySelectorAll("[data-view]").forEach((button) => button.onclick = () => { this.view = button.dataset.view; this.render(); });
+    this.querySelectorAll("[data-service]").forEach((button) => button.onclick = () => this.selectService(button.dataset.service));
+    this.querySelectorAll("[data-info]").forEach((button) => button.onclick = () => this.moreInfo(button.dataset.info));
+    this.bindPanel();
+  }
+
+  bindPanel() {
+    if (!this.selectedService) return;
+    const entity = this.services().find((item) => item.attributes.service_key === this.selectedService);
+    const a = entity.attributes;
+    const odo = this.odometer();
+    this.querySelector(".close").onclick = () => { this.selectedService = null; this.render(); };
+    this.querySelector(".completion").oninput = (event) => { this.completionMileage = Number(event.target.value); };
+    this.querySelector(".complete-now").onclick = () => {
+      const result = a.milestone ? "Milestone will be marked completed" : `Next scheduled service: ${number(odo + Number(a.interval_miles || 0))} mi`;
+      if (confirm(`Log ${a.service_name} at ${number(odo)} mi\n${result}`)) this.call("log_maintenance", { service: this.selectedService }, `${a.service_name} completed at ${number(odo)} mi`);
+    };
+    this.querySelector(".complete-other").onclick = () => {
+      const mileage = Number(this.completionMileage); const future = mileage > odo ? "\nWarning: this is greater than the effective odometer." : ""; const result = a.milestone ? "Milestone will be marked completed" : `Next scheduled service: ${number(mileage + Number(a.interval_miles || 0))} mi`;
+      if (confirm(`Log ${a.service_name} at ${number(mileage)} mi${future}\n${result}`)) this.call("log_maintenance", { service: this.selectedService, mileage }, `${a.service_name} completed at ${number(mileage)} mi`);
+    };
+    const snooze = this.querySelector(".snooze");
+    if (snooze) { snooze.value = this.snoozeChoice; snooze.onchange = (event) => { this.snoozeChoice = event.target.value; this.render(); }; }
+    if (this.querySelector(".custom-snooze")) this.querySelector(".custom-snooze").oninput = (event) => { this.customSnooze = Number(event.target.value); };
+    if (this.querySelector(".snooze-action")) this.querySelector(".snooze-action").onclick = () => { const miles = this.snoozeChoice === "custom" ? Number(this.customSnooze) : Number(this.snoozeChoice); const target = odo + miles; if (confirm(`Remind me about ${a.service_name} again at ${number(target)} mi\nThis will not mark the service completed`)) this.call("snooze_maintenance", { service: this.selectedService, miles }, `${a.service_name} deferred until ${number(target)} mi`); };
+    this.querySelector(".clear-snooze")?.addEventListener("click", () => this.call("clear_snooze", { service: this.selectedService }, `Reminder cleared for ${a.service_name}`));
+    const setupMode = this.querySelector(".setup-mode"); setupMode.value = this.setupMode;
+    setupMode.onchange = (event) => { this.setupMode = event.target.value; };
+    this.querySelector(".setup-mileage").oninput = (event) => { this.setupMileage = Number(event.target.value); };
+    this.querySelector(".apply-setup").onclick = () => this.call("set_maintenance", { service: this.selectedService, mode: this.setupMode || "not_set", mileage: Number(this.setupMileage || 0) }, `${a.service_name} record updated`);
   }
 }
 
 class VehicleMaintCardEditor extends HTMLElement {
-  constructor() {
-    super();
-    this.addEventListener("focusout", () => {
-      setTimeout(() => {
-        if (this.pendingEditorRender && !this.matches(":focus-within")) {
-          this.pendingEditorRender = false;
-          this.render();
-        }
-      }, 0);
-    });
-  }
-
-  setConfig(config) { this.config = { ...config }; this.render(); }
-  set hass(hass) {
-    this._hass = hass;
-    if (this.matches(":focus-within")) this.pendingEditorRender = true;
-    else this.render();
-  }
-
-  changed(key, value) {
-    this.config = { ...this.config, [key]: value };
-    const event = new Event("config-changed", { bubbles: true, composed: true });
-    event.detail = { config: this.config };
-    this.dispatchEvent(event);
-  }
-
+  setConfig(config) { this.config = { upcoming_miles: 2000, ...config }; this.render(); }
+  set hass(hass) { this._hass = hass; this.render(); }
+  changed(key, value) { this.config = { ...this.config, [key]: value }; this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: this.config } })); }
   render() {
     if (!this._hass || !this.config) return;
-    const vehicles = Object.values(this._hass.states).filter((entity) =>
-      entity.attributes.integration === DOMAIN && entity.attributes.entry_id && !entity.attributes.service_key
-    );
-    this.innerHTML = `<style>.editor{display:grid;gap:16px;padding:8px 0}.field label{display:block;margin-bottom:6px;color:var(--secondary-text-color)}select,input{box-sizing:border-box;width:100%;min-height:44px;padding:0 10px;border:1px solid var(--divider-color);border-radius:8px;color:var(--primary-text-color);background:var(--card-background-color)}</style>
-      <div class="editor"><div class="field"><label>Vehicle</label><select class="vehicle"><option value="">Select a vehicle</option>${vehicles.map((entity) => `<option value="${escapeHtml(entity.entity_id)}" ${entity.entity_id === this.config.main_entity ? "selected" : ""}>${escapeHtml(entity.attributes.vehicle_name || entity.attributes.friendly_name)}</option>`).join("")}</select></div>
-      <div class="field"><label>Show maintenance within this many miles</label><input class="upcoming" type="number" min="1" value="${Number(this.config.upcoming_miles || 6000)}"></div>
-      <div class="field"><label>Default extension miles</label><select class="extension"><option value="500">500</option><option value="1000">1,000</option><option value="2000">2,000</option></select></div></div>`;
-    this.querySelector(".extension").value = String(this.config.extend_miles || 1000);
-    this.querySelector(".vehicle").addEventListener("change", (event) => this.changed("main_entity", event.target.value));
-    this.querySelector(".upcoming").addEventListener("change", (event) => this.changed("upcoming_miles", Number(event.target.value)));
-    this.querySelector(".extension").addEventListener("change", (event) => this.changed("extend_miles", Number(event.target.value)));
+    const vehicles = Object.values(this._hass.states).filter((entity) => entity.attributes.integration === DOMAIN && entity.attributes.entry_id && !entity.attributes.service_key);
+    this.innerHTML = `<div><label>Vehicle</label><select class="vehicle"><option value="">Select a vehicle</option>${vehicles.map((entity) => `<option value="${esc(entity.entity_id)}" ${entity.entity_id === this.config.main_entity ? "selected" : ""}>${esc(entity.attributes.vehicle_name || entity.attributes.friendly_name)}</option>`).join("")}</select><label>Due-soon window (miles)</label><input class="upcoming" type="number" min="1" value="${Number(this.config.upcoming_miles || 2000)}"></div><style>label{display:block;margin:12px 0 5px}select,input{box-sizing:border-box;width:100%;min-height:44px;padding:0 10px}</style>`;
+    this.querySelector(".vehicle").onchange = (event) => this.changed("main_entity", event.target.value);
+    this.querySelector(".upcoming").onchange = (event) => this.changed("upcoming_miles", Number(event.target.value));
   }
 }
 
 if (!customElements.get("vehicle-maint-card")) customElements.define("vehicle-maint-card", VehicleMaintCard);
 if (!customElements.get("vehicle-maint-card-editor")) customElements.define("vehicle-maint-card-editor", VehicleMaintCardEditor);
 window.customCards = window.customCards || [];
-window.customCards.push({ type: "vehicle-maint-card", name: "Vehicle Maintenance Card", description: "Configure and manage standardized vehicle maintenance.", preview: true });
+window.customCards.push({ type: "vehicle-maint-card", name: "Vehicle Maintenance Card", description: "Vehicle-neutral maintenance tracking", preview: true });
 console.info(`%c VEHICLE-MAINT-CARD %c v${CARD_VERSION} `, "color:white;background:#455a64;font-weight:700", "color:#455a64;background:white");

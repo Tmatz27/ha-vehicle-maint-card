@@ -1,16 +1,26 @@
-"""Constants for Vehicle Maintenance."""
+"""Constants and built-in catalog for Vehicle Maintenance."""
 
 DOMAIN = "vehicle_maintenance"
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "binary_sensor"]
+CONF_VEHICLE_NAME = "vehicle_name"
 CONF_ODOMETER_ENTITY = "odometer_entity"
 CONF_SERVICES = "services"
-CONF_VEHICLE_NAME = "vehicle_name"
+CONF_INTERVALS = "intervals"
+CONF_NOTIFY_ENABLED = "notify_enabled"
 CONF_NOTIFY_SERVICE = "notify_service"
 CONF_NOTIFY_THRESHOLD = "notify_threshold"
+CONF_NOTIFY_WEEKDAY = "notify_weekday"
+CONF_NOTIFY_TIME = "notify_time"
 ATTR_ENTRY_ID = "entry_id"
 ATTR_SERVICE_KEY = "service_key"
 SIGNAL_UPDATE = f"{DOMAIN}_update"
+DEFAULT_NOTIFICATION_THRESHOLD = 1500
+DEFAULT_NOTIFICATION_WEEKDAY = "sun"
+DEFAULT_NOTIFICATION_TIME = "17:00:00"
+DEFAULT_UPCOMING_MILES = 2000
 
+# Defaults are starting points only and are editable per vehicle in the options flow.
+# None means the item requires an explicit per-vehicle interval before it is useful.
 SERVICE_CATALOG = {
     "oil_change": {"name": "Oil Change", "interval": 6000, "icon": "mdi:oil"},
     "tire_rotation": {
@@ -60,6 +70,23 @@ SERVICE_CATALOG = {
         "icon": "mdi:tire",
     },
     "spark_plugs": {"name": "Spark Plugs", "interval": 60000, "icon": "mdi:spark-plug"},
+    "brake_pads": {
+        "name": "Brake Pads",
+        "interval": 50000,
+        "icon": "mdi:car-brake-alert",
+    },
+    "wheel_alignment": {
+        "name": "Wheel Alignment",
+        "interval": 12000,
+        "icon": "mdi:wheel-alignment",
+    },
+    "pcv_valve": {"name": "PCV Valve", "interval": 60000, "icon": "mdi:engine-outline"},
+    "fuel_filter": {"name": "Fuel Filter", "interval": 60000, "icon": "mdi:fuel"},
+    "timing_inspection": {
+        "name": "Timing Belt or Chain Inspection",
+        "interval": 100000,
+        "icon": "mdi:engine",
+    },
     "service_30k": {
         "name": "30,000 mi Service",
         "interval": 30000,
@@ -103,3 +130,18 @@ SERVICE_CATALOG = {
         "milestone": True,
     },
 }
+
+DEFAULT_SERVICES = [
+    "oil_change",
+    "tire_rotation",
+    "engine_air_filter",
+    "cabin_air_filter",
+    "brake_fluid",
+    "coolant",
+    "transmission_fluid",
+    "differential_service",
+    "wiper_blades",
+    "battery_check",
+    "tire_replacement",
+    "spark_plugs",
+]
