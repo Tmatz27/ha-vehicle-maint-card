@@ -1,0 +1,209 @@
+# Paste this complete object as a manual card. It is intentionally not indented,
+# so it can also be included from a YAML-mode dashboard.
+type: vertical-stack
+cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.outback_maintenance_summary
+    primary: 2024 Outback Wilderness
+    secondary: >-
+      {{ states('sensor.outback_odometer_effective') | int(0) | format_number }} mi
+      · {{ state_attr('sensor.outback_odometer_effective', 'source') | default('Unknown', true) }}
+    icon: mdi:car-estate
+    icon_color: >-
+      {% set status = states(entity) %}
+      {{ 'red' if status == 'overdue' else 'orange' if status == 'due' else
+         'amber' if status == 'soon' else 'blue' if status == 'upcoming' else 'green' }}
+    badge_icon: >-
+      {{ 'mdi:alert-circle' if states(entity) in ['overdue', 'due'] else 'mdi:check-circle' }}
+    badge_color: >-
+      {{ 'red' if states(entity) == 'overdue' else 'orange' if states(entity) == 'due' else 'green' }}
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+    card_mod:
+      style: |
+        ha-card {
+          padding: 8px;
+          border-radius: 24px;
+          background: linear-gradient(135deg,
+            color-mix(in srgb, var(--primary-color) 16%, var(--ha-card-background)),
+            var(--ha-card-background) 68%);
+        }
+
+  - type: custom:mushroom-chips-card
+    alignment: justify
+    chips:
+      - type: template
+        entity: sensor.outback_maintenance_summary
+        icon: mdi:alert-octagon
+        icon_color: red
+        content: >-
+          {{ state_attr(entity, 'overdue_count') | int(0) }} overdue
+        tap_action:
+          action: none
+      - type: template
+        entity: sensor.outback_maintenance_summary
+        icon: mdi:clock-alert-outline
+        icon_color: orange
+        content: >-
+          {{ state_attr(entity, 'due_count') | int(0) }} due
+        tap_action:
+          action: none
+      - type: template
+        entity: sensor.outback_maintenance_summary
+        icon: mdi:calendar-clock
+        icon_color: amber
+        content: >-
+          {{ (state_attr(entity, 'soon_count') | int(0)) +
+             (state_attr(entity, 'upcoming_count') | int(0)) }} upcoming
+        tap_action:
+          action: none
+      - type: action
+        icon: mdi:refresh
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: script.outback_sync_odometer
+          confirmation:
+            text: Sync the cached mileage with the vehicle odometer?
+
+  - type: custom:auto-entities
+    show_empty: false
+    card:
+      type: entities
+      title: Needs attention
+      icon: mdi:alert-circle-outline
+      show_header_toggle: false
+      state_color: true
+      card_mod:
+        style: |
+          ha-card { border-radius: 24px; overflow: hidden; }
+          .card-header { color: var(--error-color); }
+          #states > * { min-height: 58px; }
+    filter:
+      include:
+        - entity_id: sensor.outback_*_miles_remaining
+          state: < 501
+          options: &maintenance_row
+            type: custom:template-entity-row
+            name: >-
+              {{ state_attr(config.entity, 'service_name') }}
+            state: >-
+              {% set miles = states(config.entity) | int(0) %}
+              {% if miles < 0 %}
+                {{ miles | abs | format_number }} mi overdue
+              {% elif miles <= 500 %}
+                Due in {{ miles | format_number }} mi
+              {% else %}
+                {{ miles | format_number }} mi remaining
+              {% endif %}
+            secondary: >-
+              Due at {{ state_attr(config.entity, 'next_due_mileage') | int(0) | format_number }} mi
+            tap_action:
+              action: more-info
+        - entity_id: sensor.outback_*k_service
+          state: < 501
+          options: *maintenance_row
+      exclude:
+        - state: unavailable
+        - state: unknown
+    sort:
+      method: state
+      numeric: true
+      direction: asc
+
+  - type: custom:auto-entities
+    show_empty: false
+    card:
+      type: entities
+      title: Coming up
+      icon: mdi:calendar-clock-outline
+      show_header_toggle: false
+      state_color: true
+      card_mod:
+        style: |
+          ha-card { border-radius: 24px; overflow: hidden; }
+          #states > * { min-height: 58px; }
+    filter:
+      include:
+        - entity_id: sensor.outback_*_miles_remaining
+          state: "> 500"
+          options: *maintenance_row
+        - entity_id: sensor.outback_*k_service
+          state: "> 500"
+          options: *maintenance_row
+      exclude:
+        - state: unavailable
+        - state: unknown
+        - state: "> 6000"
+    sort:
+      method: state
+      numeric: true
+      direction: asc
+
+  - type: entities
+    title: Log or defer maintenance
+    icon: mdi:wrench-clock
+    show_header_toggle: false
+    card_mod:
+      style: |
+        ha-card { border-radius: 24px; overflow: hidden; }
+        #states > * { min-height: 56px; }
+    entities:
+      - entity: input_select.outback_maintenance_service
+        name: Service
+      - type: section
+        label: Mark completed
+      - entity: sensor.outback_odometer_effective
+        name: Completion mileage
+        icon: mdi:counter
+      - type: button
+        name: Log selected service
+        icon: mdi:check-circle-outline
+        action_name: LOG SERVICE
+        tap_action:
+          action: perform-action
+          perform_action: script.outback_log_maintenance
+          confirmation:
+            text: Log the selected service at the displayed odometer mileage?
+      - type: section
+        label: Defer a recurring service
+      - entity: input_select.outback_defer_amount
+        name: Defer by
+      - type: button
+        name: Keep history and move the due mileage
+        icon: mdi:calendar-arrow-right
+        action_name: DEFER
+        tap_action:
+          action: perform-action
+          perform_action: script.outback_defer_maintenance
+          confirmation:
+            text: Defer the selected service without changing its completion history?
+
+  - type: entities
+    title: Maintenance setup
+    icon: mdi:tune-variant
+    show_header_toggle: false
+    card_mod:
+      style: |
+        ha-card { border-radius: 24px; overflow: hidden; }
+        #states > * { min-height: 56px; }
+    entities:
+      - type: custom:mushroom-title-card
+        subtitle: >-
+          Initialize history, set a known due mileage, or stop tracking an item.
+      - entity: input_select.outback_maintenance_service
+        name: Service
+      - entity: input_select.outback_setup_mode
+        name: Setup method
+      - entity: input_number.outback_setup_mileage
+        name: Mileage
+      - type: button
+        name: Apply selected setup method
+        icon: mdi:content-save-check-outline
+        action_name: APPLY
+        tap_action:
+          action: perform-action
+          perform_action: script.outback_setup_maintenance
+          confirmation:
+            text: Apply this setup choice to the selected service?
