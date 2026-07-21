@@ -1,0 +1,104 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a vehicle",
+        "description": "Choose the odometer, tracked services, and notification settings.",
+        "data": {
+          "vehicle_name": "Vehicle display name",
+          "odometer_entity": "Authoritative odometer sensor",
+          "services": "Services to track",
+          "notify_enabled": "Enable weekly summary",
+          "notify_service": "Notification action (for example notify.notify)",
+          "notify_threshold": "Notification threshold (miles)",
+          "notify_weekday": "Notification day",
+          "notify_time": "Notification time"
+        }
+      },
+      "intervals": {
+        "title": "Review service intervals",
+        "description": "Review every interval for {vehicle}. These values are stored only for this vehicle.",
+        "data": {
+          "interval_oil_change": "Oil Change interval (miles)",
+          "interval_tire_rotation": "Tire Rotation interval (miles)",
+          "interval_engine_air_filter": "Engine Air Filter interval (miles)",
+          "interval_cabin_air_filter": "Cabin Air Filter interval (miles)",
+          "interval_brake_fluid": "Brake Fluid interval (miles)",
+          "interval_coolant": "Coolant interval (miles)",
+          "interval_transmission_fluid": "Transmission Fluid interval (miles)",
+          "interval_differential_service": "Differential Service interval (miles)",
+          "interval_wiper_blades": "Wiper Blades interval (miles)",
+          "interval_battery_check": "Battery Check interval (miles)",
+          "interval_tire_replacement": "Tire Replacement interval (miles)",
+          "interval_spark_plugs": "Spark Plugs interval (miles)",
+          "interval_brake_pads": "Brake Pads interval (miles)",
+          "interval_wheel_alignment": "Wheel Alignment interval (miles)",
+          "interval_pcv_valve": "PCV Valve interval (miles)",
+          "interval_fuel_filter": "Fuel Filter interval (miles)",
+          "interval_timing_inspection": "Timing Belt or Chain Inspection interval (miles)",
+          "interval_service_30k": "30,000 mi Service interval (miles)",
+          "interval_service_60k": "60,000 mi Service interval (miles)",
+          "interval_service_90k": "90,000 mi Service interval (miles)",
+          "interval_service_120k": "120,000 mi Service interval (miles)",
+          "interval_service_125k": "125,000 mi Service interval (miles)",
+          "interval_service_180k": "180,000 mi Service interval (miles)",
+          "interval_service_200k": "200,000 mi Service interval (miles)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Vehicle maintenance options",
+        "description": "Update the vehicle, source, services, and notification schedule.",
+        "data": {
+          "vehicle_name": "Vehicle display name",
+          "odometer_entity": "Authoritative odometer sensor",
+          "services": "Services to track",
+          "notify_enabled": "Enable weekly summary",
+          "notify_service": "Notification action",
+          "notify_threshold": "Notification threshold (miles)",
+          "notify_weekday": "Notification day",
+          "notify_time": "Notification time"
+        }
+      },
+      "intervals": {
+        "title": "Review service intervals",
+        "description": "Review every interval for {vehicle}.",
+        "data": {
+          "interval_oil_change": "Oil Change interval (miles)",
+          "interval_tire_rotation": "Tire Rotation interval (miles)",
+          "interval_engine_air_filter": "Engine Air Filter interval (miles)",
+          "interval_cabin_air_filter": "Cabin Air Filter interval (miles)",
+          "interval_brake_fluid": "Brake Fluid interval (miles)",
+          "interval_coolant": "Coolant interval (miles)",
+          "interval_transmission_fluid": "Transmission Fluid interval (miles)",
+          "interval_differential_service": "Differential Service interval (miles)",
+          "interval_wiper_blades": "Wiper Blades interval (miles)",
+          "interval_battery_check": "Battery Check interval (miles)",
+          "interval_tire_replacement": "Tire Replacement interval (miles)",
+          "interval_spark_plugs": "Spark Plugs interval (miles)",
+          "interval_brake_pads": "Brake Pads interval (miles)",
+          "interval_wheel_alignment": "Wheel Alignment interval (miles)",
+          "interval_pcv_valve": "PCV Valve interval (miles)",
+          "interval_fuel_filter": "Fuel Filter interval (miles)",
+          "interval_timing_inspection": "Timing Belt or Chain Inspection interval (miles)",
+          "interval_service_30k": "30,000 mi Service interval (miles)",
+          "interval_service_60k": "60,000 mi Service interval (miles)",
+          "interval_service_90k": "90,000 mi Service interval (miles)",
+          "interval_service_120k": "120,000 mi Service interval (miles)",
+          "interval_service_125k": "125,000 mi Service interval (miles)",
+          "interval_service_180k": "180,000 mi Service interval (miles)",
+          "interval_service_200k": "200,000 mi Service interval (miles)"
+        }
+      }
+    }
+  },
+  "error": {
+    "odometer_already_configured": "This odometer source is already assigned to another vehicle.",
+    "odometer_not_miles": "The odometer must report miles. Create a miles conversion sensor first.",
+    "odometer_not_numeric": "The selected odometer does not currently have a numeric state.",
+    "invalid_notify_action": "Enter an available notification action such as notify.notify."
+  }
+}

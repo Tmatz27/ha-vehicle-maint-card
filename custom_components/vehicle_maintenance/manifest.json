@@ -1,0 +1,18 @@
+{
+  "domain": "vehicle_maintenance",
+  "name": "Vehicle Maintenance",
+  "codeowners": [
+    "@Tmatz27"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/Tmatz27/ha-vehicle-maint-card",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "0.1.0",
+  "issue_tracker": "https://github.com/Tmatz27/ha-vehicle-maint-card/issues",
+  "integration_type": "service",
+  "dependencies": [
+    "frontend",
+    "http"
+  ]
+}
