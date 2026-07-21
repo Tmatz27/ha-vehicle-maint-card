@@ -1,11 +1,14 @@
 """Runtime contract test against the installed Home Assistant Store API."""
 
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 pytest.importorskip("homeassistant")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from homeassistant.helpers.storage import Store  # noqa: E402
 
