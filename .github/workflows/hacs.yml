@@ -1,0 +1,24 @@
+name: HACS validation
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify repository information files
+        run: |
+          test -s README.md
+          test -s LICENSE
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # These checks read repository metadata from the default branch rather
+          # than the pull request tree. README and LICENSE are verified above.
+          ignore: brands description license topics

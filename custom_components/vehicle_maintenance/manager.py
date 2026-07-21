@@ -19,9 +19,21 @@ from .const import (
     SERVICE_CATALOG,
     SIGNAL_UPDATE,
 )
-from .model import ServiceRecord, accepted_odometer, migrate_v1_data
+from .model import ServiceRecord, accepted_odometer, migrate_storage_data
 
 STORAGE_VERSION = 2
+
+
+class VehicleMaintenanceStore(Store[dict[str, Any]]):
+    """Versioned store using Home Assistant's supported migration hook."""
+
+    async def _async_migrate_func(
+        self,
+        old_major_version: int,
+        old_minor_version: int,
+        old_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        return migrate_storage_data(old_major_version, old_data, SERVICE_CATALOG)
 
 
 @dataclass
@@ -35,20 +47,10 @@ class VehicleManager:
     odometer_source: str = "unavailable"
 
     def __post_init__(self) -> None:
-        self.store = Store(
-            self.hass,
-            STORAGE_VERSION,
-            f"{DOMAIN}.{self.entry.entry_id}",
-            async_migrate_func=self._async_migrate,
+        self.store = VehicleMaintenanceStore(
+            self.hass, STORAGE_VERSION, f"{DOMAIN}.{self.entry.entry_id}"
         )
         self._unsub_odometer = None
-
-    async def _async_migrate(
-        self, old_major_version: int, old_minor_version: int, old_data: dict[str, Any]
-    ) -> dict[str, Any]:
-        if old_major_version == 1:
-            return migrate_v1_data(old_data, SERVICE_CATALOG)
-        return old_data
 
     @property
     def config(self) -> dict[str, Any]:
@@ -72,7 +74,12 @@ class VehicleManager:
         intervals = self.config.get(CONF_INTERVALS, {})
         for key in self.config[CONF_SERVICES]:
             definition = SERVICE_CATALOG[key]
-            record = self.records.setdefault(key, ServiceRecord())
+            record = self.records.get(key)
+            if record is None:
+                record = ServiceRecord(
+                    initialized=bool(definition.get("milestone"))
+                )
+                self.records[key] = record
             record.interval_miles = int(
                 intervals.get(key, definition.get("interval", 0))
             )
@@ -95,6 +102,7 @@ class VehicleManager:
         self.hass.async_create_task(self.async_refresh_odometer())
 
     async def async_refresh_odometer(self, *, save: bool = True) -> bool:
+        previous_source = self.odometer_source
         state = self.hass.states.get(self.config[CONF_ODOMETER_ENTITY])
         try:
             value = int(float(state.state)) if state is not None else None
@@ -105,14 +113,15 @@ class VehicleManager:
             self.odometer_source = (
                 "cached" if self.cached_odometer is not None else "unavailable"
             )
-            self.async_update_listeners()
+            if self.odometer_source != previous_source:
+                self.async_update_listeners()
             return False
         changed = accepted != self.cached_odometer
         self.cached_odometer = accepted
         self.odometer_source = "live"
         if changed and save:
             await self.async_save()
-        else:
+        elif self.odometer_source != previous_source:
             self.async_update_listeners()
         return True
 

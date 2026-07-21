@@ -28,6 +28,7 @@ async def async_setup_entry(
 
 
 class MaintenanceDueBinarySensor(BinarySensorEntity):
+    _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_name = "Maintenance due"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
@@ -41,6 +42,10 @@ class MaintenanceDueBinarySensor(BinarySensorEntity):
             name=manager.entry.title,
             manufacturer="Vehicle Maintenance",
         )
+
+    @property
+    def available(self) -> bool:
+        return self.manager.effective_odometer is not None
 
     @property
     def is_on(self) -> bool:
