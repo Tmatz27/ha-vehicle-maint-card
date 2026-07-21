@@ -1,40 +1,73 @@
-# Adding another vehicle
+# Adding a Vehicle
 
-For a small garage, use one package and one dashboard file per vehicle. This is
-more transparent than a custom integration and keeps every entity editable from
-Home Assistant.
+Every vehicle is a separate Home Assistant config entry and device. No YAML package, helper duplication, entity-prefix replacement, or copied automation is required.
 
-## Checklist
+## Before setup
 
-1. Copy `packages/vehicle_outback.yaml` to `packages/vehicle_<slug>.yaml`.
-2. Replace the `outback` entity prefix with a short, stable vehicle slug.
-3. Replace `Outback` and `2024 Outback Wilderness` with the display names.
-4. Set the real odometer entity in the effective-odometer sensor and sync script.
-5. Give every automation a new `id`.
-6. Confirm the maintenance intervals for the new vehicle's manufacturer schedule.
-7. Copy the dashboard file and replace its entity prefix.
-8. Reload template entities/scripts/automations or restart Home Assistant.
-9. Use the setup workflow to initialize each service independently.
+Confirm that the vehicle already has a Home Assistant odometer sensor with:
 
-## Stable naming
+- A numeric state
+- Mileage reported in miles
+- A stable entity ID
 
-Do not add version suffixes to production entity IDs. Keep entity IDs stable and
-track package revisions in Git. A useful convention is:
+If the source reports kilometers, create a miles conversion sensor first.
 
-```text
-input_number.<vehicle>_last_<service>
-input_number.<vehicle>_<service>_extension
-input_boolean.<vehicle>_track_<service>
-sensor.<vehicle>_<service>_miles_remaining
-sensor.<vehicle>_maintenance_summary
-script.<vehicle>_log_maintenance
+## Add the vehicle
+
+1. Open **Settings > Devices & services**.
+2. Select **Add Integration**.
+3. Search for **Vehicle Maintenance**.
+4. Enter the vehicle display name.
+5. Select its authoritative odometer sensor.
+6. Select the recurring services and mileage milestones to track.
+7. Enable notifications if desired and select the notification action.
+8. Review every service interval on the next screen.
+9. Finish setup.
+
+The odometer sensor cannot be assigned to two Vehicle Maintenance entries. This prevents two vehicle records from accidentally using the same mileage.
+
+## Add its card
+
+Use the dashboard visual editor and select **Vehicle Maintenance Card**, or add:
+
+```yaml
+type: custom:vehicle-maint-card
+main_entity: sensor.REPLACE_maintenance
+upcoming_miles: 2000
+extend_miles: 1000
 ```
 
-## Scaling beyond a few vehicles
+Replace the example entity with the maintenance summary sensor created for the vehicle.
 
-Copying a package is reasonable for two to five vehicles. If the service catalog
-changes frequently or the garage grows beyond that, generate these packages from
-a small vehicle definition file rather than editing copies by hand. A custom
-integration is only worthwhile if configuration through the UI, a persistent
-service-history database, or public distribution is required.
+## Begin tracking recurring services
 
+Open **All Maintenance** on the card. A recurring item displays **Not logged yet** until a completion mileage is known.
+
+For each known service:
+
+1. Open its row.
+2. Select **Log Maintenance**.
+3. Use the current odometer or enter the actual earlier completion mileage.
+4. Review the next due preview and save.
+
+Do not enter zero when the previous completion mileage is unknown. Leave the item Not logged yet until accurate information is available.
+
+Mileage milestones use the same Log Maintenance workflow when completed.
+
+## Change the vehicle later
+
+Open **Settings > Devices & services > Vehicle Maintenance**, select the vehicle, and choose **Configure**.
+
+The options flow can change:
+
+- Display name
+- Odometer source
+- Selected maintenance services
+- Per-vehicle intervals
+- Notification target, threshold, weekday, and time
+
+Disabling a service removes it from active tracking but retains its stored record in case it is enabled again.
+
+## Add another vehicle
+
+Repeat the integration setup and add another card using the new vehicle's maintenance summary sensor. State, intervals, extensions, and notifications remain isolated between vehicles.

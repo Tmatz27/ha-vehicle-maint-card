@@ -122,3 +122,51 @@ def test_notification_sorting_and_formatting():
     items = model.notification_items(records, catalog, 45000, 1500)
     assert items == [(-5000, "Late"), (1000, "Soon")]
     assert model.format_notification_item(items[0]) == "- Late: 5,000 mi overdue"
+
+
+def test_deselected_service_is_excluded_from_notifications():
+    records = {
+        "selected": ServiceRecord(True, 40000, 6000),
+        "deselected": ServiceRecord(True, 10000, 6000),
+    }
+    catalog = {
+        "selected": {"name": "Selected", "interval": 6000},
+        "deselected": {"name": "Deselected", "interval": 6000},
+    }
+    assert model.notification_items(
+        records, catalog, 45000, 1500, {"selected"}
+    ) == [(1000, "Selected")]
+
+
+def test_storage_migration_versions_and_future_rejection():
+    migrate_storage_data = model.migrate_storage_data
+    catalog = {"oil": {"name": "Oil", "interval": 6000}}
+
+    current = {"cached_odometer": 123, "services": {}}
+    assert migrate_storage_data(2, current, catalog) is current
+    assert migrate_storage_data(1, None, catalog) == {"cached_odometer": None, "services": {"oil": {
+        "initialized": False,
+        "last_completed_mileage": None,
+        "interval_miles": 6000,
+        "due_mileage_override": None,
+        "snoozed_until_mileage": None,
+        "milestone_completed": False,
+        "milestone_completed_mileage": None,
+    }}}
+    import pytest
+    with pytest.raises(ValueError, match="Unsupported storage version"):
+        migrate_storage_data(99, current, catalog)
+
+
+def test_service_argument_validation():
+    import pytest
+
+    model.validate_snooze_arguments(miles=1000, until_mileage=None)
+    model.validate_snooze_arguments(miles=None, until_mileage=50000)
+    for miles, target in ((None, None), (1000, 50000)):
+        with pytest.raises(ValueError, match="exactly one"):
+            model.validate_snooze_arguments(miles=miles, until_mileage=target)
+    model.validate_setup_arguments("not_set", None)
+    model.validate_setup_arguments("never_performed", None)
+    with pytest.raises(ValueError, match="Mileage is required"):
+        model.validate_setup_arguments("last_completed", None)

@@ -16,22 +16,22 @@ log_maintenance:
       selector: {number: {min: 0, max: 1000000, mode: box}}
 
 snooze_maintenance:
-  name: Remind me later
-  description: Suppress reminders until a target measured from the effective odometer without changing factual service history.
+  name: Extend maintenance
+  description: Postpone dashboard attention and notifications from the effective odometer without logging the service as completed.
   fields:
     entry_id: *entry
     service: *service
     miles:
-      name: Check again in miles
+      name: Extension amount in miles
       required: false
       selector: {number: {min: 1, max: 100000, mode: box}}
     until_mileage:
-      name: Explicit reminder mileage
+      name: Explicit extension target mileage
       required: false
       selector: {number: {min: 1, max: 1000000, mode: box}}
 
 clear_snooze:
-  name: Clear reminder
+  name: Clear extension
   fields:
     entry_id: *entry
     service: *service

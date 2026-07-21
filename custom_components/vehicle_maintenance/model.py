@@ -12,6 +12,18 @@ STATUS_OKAY = "okay"
 STATUS_COMPLETED = "completed"
 
 
+def validate_snooze_arguments(*, miles: int | None, until_mileage: int | None) -> None:
+    """Require exactly one reminder input."""
+    if (miles is None) == (until_mileage is None):
+        raise ValueError("Provide exactly one of miles or until_mileage")
+
+
+def validate_setup_arguments(mode: str, mileage: int | None) -> None:
+    """Require mileage only for record modes that need a value."""
+    if mode in ("last_completed", "due_at") and mileage is None:
+        raise ValueError(f"Mileage is required for {mode}")
+
+
 def accepted_odometer(
     cached: int | None, candidate: int | None, *, allow_decrease: bool = False
 ) -> int | None:
@@ -150,14 +162,15 @@ def snooze_service(
     miles: int | None = None,
     until_mileage: int | None = None,
 ) -> int:
+    validate_snooze_arguments(miles=miles, until_mileage=until_mileage)
     if not record.initialized:
-        raise ValueError("Service history must be initialized before snoozing")
+        raise ValueError("Maintenance must be logged before it can be extended")
     if until_mileage is None:
         if miles is None or miles <= 0:
             raise ValueError("A positive mileage interval or target is required")
         until_mileage = odometer + miles
     if until_mileage <= odometer:
-        raise ValueError("Snooze target must be greater than the current odometer")
+        raise ValueError("Extension target must be greater than the current odometer")
     record.snoozed_until_mileage = until_mileage
     return until_mileage
 
@@ -196,15 +209,32 @@ def migrate_v1_data(
     }
 
 
+def migrate_storage_data(
+    old_major_version: int,
+    old_data: dict[str, Any] | None,
+    service_catalog: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Migrate a stored payload, preserving current-version data verbatim."""
+    data = old_data or {}
+    if old_major_version == 1:
+        return migrate_v1_data(data, service_catalog)
+    if old_major_version == 2:
+        return data
+    raise ValueError(f"Unsupported storage version: {old_major_version}")
+
+
 def notification_items(
     records: dict[str, ServiceRecord],
     catalog: dict[str, dict[str, Any]],
     odometer: int,
     threshold: int,
+    selected_services: set[str] | None = None,
 ) -> list[tuple[int, str]]:
     """Return unsnoozed, initialized notification items sorted by urgency."""
     result: list[tuple[int, str]] = []
     for key, record in records.items():
+        if selected_services is not None and key not in selected_services:
+            continue
         definition = catalog.get(key, {})
         milestone = bool(definition.get("milestone"))
         if not record.initialized or (milestone and record.milestone_completed):

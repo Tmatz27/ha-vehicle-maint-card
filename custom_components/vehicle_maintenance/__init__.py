@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_ENTRY_ID,
@@ -39,14 +40,35 @@ from .model import (
     initialize_service,
     notification_items,
     snooze_service,
+    validate_setup_arguments,
+    validate_snooze_arguments,
 )
 
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
 CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.0"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+def _validate_snooze_data(data: dict) -> dict:
+    try:
+        validate_snooze_arguments(
+            miles=data.get("miles"), until_mileage=data.get("until_mileage")
+        )
+    except ValueError as error:
+        raise vol.Invalid(str(error)) from error
+    return data
+
+
+def _validate_set_data(data: dict) -> dict:
+    try:
+        validate_setup_arguments(data["mode"], data.get("mileage"))
+    except ValueError as error:
+        raise vol.Invalid(str(error)) from error
+    return data
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register frontend and actions exactly once for the integration."""
     card_path = Path(__file__).parent / "www" / "vehicle-maint-card.js"
     await hass.http.async_register_static_paths(
@@ -136,16 +158,17 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         DOMAIN,
         "snooze_maintenance",
         snooze_maintenance,
-        schema=vol.Schema(
-            {
-                **common,
-                vol.Exclusive("miles", "target"): vol.All(
-                    vol.Coerce(int), vol.Range(min=1)
-                ),
-                vol.Exclusive("until_mileage", "target"): vol.All(
-                    vol.Coerce(int), vol.Range(min=1)
-                ),
-            }
+        schema=vol.All(
+            vol.Schema(
+                {
+                    **common,
+                    vol.Optional("miles"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                    vol.Optional("until_mileage"): vol.All(
+                        vol.Coerce(int), vol.Range(min=1)
+                    ),
+                }
+            ),
+            _validate_snooze_data,
         ),
     )
     hass.services.async_register(
@@ -155,14 +178,19 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         DOMAIN,
         "set_maintenance",
         set_maintenance,
-        schema=vol.Schema(
-            {
-                **common,
-                vol.Required("mode"): vol.In(
-                    ["not_set", "never_performed", "last_completed", "due_at"]
-                ),
-                vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=0)),
-            }
+        schema=vol.All(
+            vol.Schema(
+                {
+                    **common,
+                    vol.Required("mode"): vol.In(
+                        ["not_set", "never_performed", "last_completed", "due_at"]
+                    ),
+                    vol.Optional("mileage"): vol.All(
+                        vol.Coerce(int), vol.Range(min=0)
+                    ),
+                }
+            ),
+            _validate_set_data,
         ),
     )
     hass.services.async_register(
@@ -267,6 +295,7 @@ async def _async_send_notification(
         SERVICE_CATALOG,
         manager.effective_odometer,
         int(config.get(CONF_NOTIFY_THRESHOLD, 1500)),
+        set(manager.config[CONF_SERVICES]),
     )
     if not items:
         return

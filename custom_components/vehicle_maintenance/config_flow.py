@@ -7,6 +7,7 @@ from datetime import time
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfLength
 from homeassistant.helpers import selector
 
 from .const import (
@@ -133,6 +134,40 @@ def _normalize_time(value) -> str:
     return value if value.count(":") == 2 else f"{value}:00"
 
 
+def _input_errors(hass, user_input: dict, entries, current_entry_id=None) -> dict:
+    errors = {}
+    source = user_input[CONF_ODOMETER_ENTITY]
+    if any(
+        entry.entry_id != current_entry_id
+        and {**entry.data, **entry.options}.get(CONF_ODOMETER_ENTITY) == source
+        for entry in entries
+    ):
+        errors[CONF_ODOMETER_ENTITY] = "odometer_already_configured"
+    state = hass.states.get(source)
+    if state is None:
+        errors[CONF_ODOMETER_ENTITY] = "odometer_not_numeric"
+    else:
+        unit = state.attributes.get("unit_of_measurement")
+        if unit not in (UnitOfLength.MILES, "mile", "miles"):
+            errors[CONF_ODOMETER_ENTITY] = "odometer_not_miles"
+        elif state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            errors[CONF_ODOMETER_ENTITY] = "odometer_not_numeric"
+        else:
+            try:
+                float(state.state)
+            except (TypeError, ValueError):
+                errors[CONF_ODOMETER_ENTITY] = "odometer_not_numeric"
+    if user_input.get(CONF_NOTIFY_ENABLED):
+        target = str(user_input.get(CONF_NOTIFY_SERVICE, "")).strip()
+        if "." not in target:
+            errors[CONF_NOTIFY_SERVICE] = "invalid_notify_action"
+        else:
+            domain, service = target.split(".", 1)
+            if not hass.services.has_service(domain, service):
+                errors[CONF_NOTIFY_SERVICE] = "invalid_notify_action"
+    return errors
+
+
 class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 2
 
@@ -141,6 +176,15 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
+            errors = _input_errors(
+                self.hass, user_input, self._async_current_entries()
+            )
+            if errors:
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=_base_schema(user_input, include_name=True),
+                    errors=errors,
+                )
             self._pending = dict(user_input)
             return await self.async_step_intervals()
         return self.async_show_form(
@@ -178,6 +222,18 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
         current = {**self._entry.data, **self._entry.options}
         defaults = {**current, CONF_VEHICLE_NAME: self._entry.title}
         if user_input is not None:
+            errors = _input_errors(
+                self.hass,
+                user_input,
+                self.hass.config_entries.async_entries(DOMAIN),
+                self._entry.entry_id,
+            )
+            if errors:
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=_base_schema(user_input, include_name=True),
+                    errors=errors,
+                )
             self._pending = dict(user_input)
             return await self.async_step_intervals()
         return self.async_show_form(
