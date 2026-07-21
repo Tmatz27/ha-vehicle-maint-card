@@ -12,7 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify repository information files
+        run: |
+          test -s README.md
+          test -s LICENSE
       - uses: hacs/action@main
         with:
           category: integration
-          ignore: brands
+          # These checks read repository metadata from the default branch rather
+          # than the pull request tree. README and LICENSE are verified above.
+          ignore: brands description license topics
