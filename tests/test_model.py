@@ -29,6 +29,69 @@ def test_new_record_starts_as_never_performed():
     assert model.service_status(record, 44973) == "overdue"
 
 
+def test_first_service_interval_can_differ_from_repeat_interval():
+    catalog = {
+        "coolant": {
+            "name": "Coolant",
+            "interval": 75000,
+            "initial_interval": 137500,
+        }
+    }
+    records = {}
+
+    assert model.normalize_selected_records(
+        records, ["coolant"], {"coolant": 75000}, catalog
+    )
+    coolant = records["coolant"]
+    assert coolant.last_completed_mileage == 0
+    assert coolant.due_mileage_override == 137500
+    assert coolant.initial_due_mileage_applied
+    assert model.scheduled_due_mileage(coolant) == 137500
+
+    assert model.normalize_selected_records(
+        records,
+        ["coolant"],
+        {"coolant": 75000},
+        catalog,
+        {"coolant": 140000},
+    )
+    assert model.scheduled_due_mileage(coolant) == 140000
+
+    model.complete_service(coolant, 137500)
+    assert coolant.due_mileage_override is None
+    assert not coolant.initial_due_mileage_applied
+    assert model.scheduled_due_mileage(coolant) == 212500
+
+    model.initialize_service(coolant, "never_performed", initial_due_mileage=137500)
+    assert coolant.initial_due_mileage_applied
+    assert model.scheduled_due_mileage(coolant) == 137500
+
+
+def test_custom_due_override_is_not_replaced_by_first_service_interval():
+    catalog = {
+        "coolant": {
+            "name": "Coolant",
+            "interval": 75000,
+            "initial_interval": 137500,
+        }
+    }
+    record = ServiceRecord(
+        last_completed_mileage=None,
+        interval_miles=75000,
+        due_mileage_override=150000,
+    )
+    records = {"coolant": record}
+
+    assert not model.normalize_selected_records(
+        records,
+        ["coolant"],
+        {"coolant": 75000},
+        catalog,
+        {"coolant": 140000},
+    )
+    assert model.scheduled_due_mileage(record) == 150000
+
+
 def test_log_current_and_historical_mileage():
     record = ServiceRecord(True, 43000, 6000)
     model.complete_service(record, 44973)
@@ -136,9 +199,9 @@ def test_deselected_service_is_excluded_from_notifications():
         "selected": {"name": "Selected", "interval": 6000},
         "deselected": {"name": "Deselected", "interval": 6000},
     }
-    assert model.notification_items(
-        records, catalog, 45000, 1500, {"selected"}
-    ) == [(1000, "Selected")]
+    assert model.notification_items(records, catalog, 45000, 1500, {"selected"}) == [
+        (1000, "Selected")
+    ]
 
 
 def test_storage_migration_versions_and_future_rejection():
@@ -158,10 +221,12 @@ def test_storage_migration_versions_and_future_rejection():
                 "snoozed_until_mileage": None,
                 "milestone_completed": False,
                 "milestone_completed_mileage": None,
+                "initial_due_mileage_applied": False,
             }
         },
     }
     import pytest
+
     with pytest.raises(ValueError, match="Unsupported storage version"):
         migrate_storage_data(99, current, catalog)
 

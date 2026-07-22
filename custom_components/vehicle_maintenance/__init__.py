@@ -17,6 +17,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_ENTRY_ID,
+    CONF_INITIAL_INTERVALS,
     CONF_NOTIFY_ENABLED,
     CONF_NOTIFY_SERVICE,
     CONF_NOTIFY_THRESHOLD,
@@ -31,6 +32,7 @@ from .const import (
     DEFAULT_NOTIFICATION_WEEKDAY,
     DOMAIN,
     PLATFORMS,
+    PREVIOUS_DEFAULT_INTERVALS,
     SERVICE_CATALOG,
 )
 from .manager import VehicleManager
@@ -45,7 +47,7 @@ from .model import (
 )
 
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.1"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.2"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -121,17 +123,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def set_maintenance(call: ServiceCall) -> None:
         manager = manager_for(call)
+        key = call.data["service"]
+        initial_due = manager.config.get(CONF_INITIAL_INTERVALS, {}).get(
+            key, SERVICE_CATALOG[key].get("initial_interval")
+        )
         initialize_service(
-            record_for(manager, call.data["service"]),
+            record_for(manager, key),
             call.data["mode"],
             call.data.get("mileage"),
+            initial_due_mileage=initial_due,
         )
         await manager.async_save()
 
     async def reset_service(call: ServiceCall) -> None:
         manager = manager_for(call)
+        key = call.data["service"]
+        initial_due = manager.config.get(CONF_INITIAL_INTERVALS, {}).get(
+            key, SERVICE_CATALOG[key].get("initial_interval")
+        )
         initialize_service(
-            record_for(manager, call.data["service"]), "never_performed"
+            record_for(manager, key),
+            "never_performed",
+            initial_due_mileage=initial_due,
         )
         await manager.async_save()
 
@@ -187,9 +200,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     vol.Required("mode"): vol.In(
                         ["not_set", "never_performed", "last_completed", "due_at"]
                     ),
-                    vol.Optional("mileage"): vol.All(
-                        vol.Coerce(int), vol.Range(min=0)
-                    ),
+                    vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=0)),
                 }
             ),
             _validate_set_data,
@@ -245,9 +256,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate config-entry settings separately from per-vehicle stored records."""
-    if entry.version > 2:
+    if entry.version > 3:
         return False
-    if entry.version == 1:
+    version = entry.version
+    if version == 1:
         data = dict(entry.data)
         selected = data.get(CONF_SERVICES, [])
         data.setdefault(
@@ -262,6 +274,28 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if CONF_ODOMETER_ENTITY not in data:
             return False
         hass.config_entries.async_update_entry(entry, data=data, version=2)
+        version = 2
+    if version == 2:
+        data = dict(entry.data)
+        options = dict(entry.options)
+        target = options if CONF_INTERVALS in options else data
+        intervals = dict(target.get(CONF_INTERVALS, {}))
+        for key, previous in PREVIOUS_DEFAULT_INTERVALS.items():
+            if intervals.get(key) == previous:
+                intervals[key] = SERVICE_CATALOG[key]["interval"]
+        target[CONF_INTERVALS] = intervals
+        selected = {**data, **options}.get(CONF_SERVICES, [])
+        initial_intervals = dict(target.get(CONF_INITIAL_INTERVALS, {}))
+        for key in selected:
+            if initial := SERVICE_CATALOG[key].get("initial_interval"):
+                initial_intervals.setdefault(key, initial)
+        target[CONF_INITIAL_INTERVALS] = initial_intervals
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options=options,
+            version=3,
+        )
     return True
 
 

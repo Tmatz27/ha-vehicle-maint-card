@@ -121,6 +121,16 @@ test("never-performed services are explicit and still have a calculated schedule
     detail: "Never performed · 1,000 mi overdue",
     badge: "OVERDUE",
   });
+
+  entity.attributes.due_mileage_override = 137500;
+  entity.attributes.miles_remaining = 92527;
+  entity.attributes.status = "okay";
+  assert.equal(isNeverPerformed(entity), true);
+  assert.deepEqual(servicePresentation(entity, 44973), {
+    kind: "okay",
+    detail: "Never performed · 92,527 mi remaining",
+    badge: "92,527 mi",
+  });
 });
 
 test("normal card source does not expose internal record editing", () => {

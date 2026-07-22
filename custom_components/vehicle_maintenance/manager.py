@@ -12,6 +12,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    CONF_INITIAL_INTERVALS,
     CONF_INTERVALS,
     CONF_ODOMETER_ENTITY,
     CONF_SERVICES,
@@ -83,6 +84,7 @@ class VehicleManager:
             self.config[CONF_SERVICES],
             self.config.get(CONF_INTERVALS, {}),
             SERVICE_CATALOG,
+            self.config.get(CONF_INITIAL_INTERVALS, {}),
         )
 
     async def async_start(self) -> None:

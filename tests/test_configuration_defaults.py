@@ -3,6 +3,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import struct
 
 
 ROOT = Path(__file__).parents[1]
@@ -14,6 +15,37 @@ spec.loader.exec_module(const)
 
 def test_new_vehicles_select_the_complete_catalog() -> None:
     assert const.DEFAULT_SERVICES == list(const.SERVICE_CATALOG)
+
+
+def test_modern_subaru_defaults_and_supported_icons() -> None:
+    catalog = const.SERVICE_CATALOG
+
+    assert catalog["oil_change"]["interval"] == 6000
+    assert catalog["tire_rotation"]["interval"] == 6000
+    assert catalog["spark_plugs"]["interval"] == 60000
+    assert catalog["fuel_filter"]["interval"] == 72000
+    assert catalog["coolant"]["initial_interval"] == 137500
+    assert catalog["coolant"]["interval"] == 75000
+    assert catalog["spark_plugs"]["icon"] == "mdi:flash"
+    assert catalog["wheel_alignment"]["icon"] == "mdi:steering"
+
+
+def test_service_selection_uses_a_persistent_multi_select_list() -> None:
+    source = (ROOT / "custom_components/vehicle_maintenance/config_flow.py").read_text()
+
+    assert "multiple=True" in source
+    assert "mode=selector.SelectSelectorMode.LIST" in source
+    assert "mode=selector.SelectSelectorMode.DROPDOWN" not in source
+    assert "async_step_services" in source
+
+
+def test_local_brand_icons_are_valid_png_sizes() -> None:
+    brand = ROOT / "custom_components/vehicle_maintenance/brand"
+    for filename, expected_size in (("icon.png", 256), ("icon@2x.png", 512)):
+        payload = (brand / filename).read_bytes()
+        assert payload.startswith(b"\x89PNG\r\n\x1a\n")
+        width, height = struct.unpack(">II", payload[16:24])
+        assert (width, height) == (expected_size, expected_size)
 
 
 def test_manifest_classifies_each_config_entry_as_a_device() -> None:

@@ -46,6 +46,7 @@ class ServiceRecord:
     snoozed_until_mileage: int | None = None
     milestone_completed: bool = False
     milestone_completed_mileage: int | None = None
+    initial_due_mileage_applied: bool = False
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> ServiceRecord:
@@ -116,6 +117,7 @@ def complete_service(
 ) -> None:
     record.initialized = True
     record.due_mileage_override = None
+    record.initial_due_mileage_applied = False
     record.snoozed_until_mileage = None
     if milestone:
         record.milestone_completed = True
@@ -125,7 +127,11 @@ def complete_service(
 
 
 def initialize_service(
-    record: ServiceRecord, mode: str, mileage: int | None = None
+    record: ServiceRecord,
+    mode: str,
+    mileage: int | None = None,
+    *,
+    initial_due_mileage: int | None = None,
 ) -> None:
     """Apply an explicit setup state without fabricating service history."""
     record.snoozed_until_mileage = None
@@ -136,19 +142,22 @@ def initialize_service(
         # every user-visible record now resolves to Never performed.
         record.initialized = True
         record.last_completed_mileage = 0
-        record.due_mileage_override = None
+        record.due_mileage_override = initial_due_mileage
+        record.initial_due_mileage_applied = initial_due_mileage is not None
     elif mode == "last_completed":
         if mileage is None:
             raise ValueError("Mileage is required")
         record.initialized = True
         record.last_completed_mileage = mileage
         record.due_mileage_override = None
+        record.initial_due_mileage_applied = False
     elif mode == "due_at":
         if mileage is None:
             raise ValueError("Mileage is required")
         record.initialized = True
         record.last_completed_mileage = None
         record.due_mileage_override = mileage
+        record.initial_due_mileage_applied = False
     else:
         raise ValueError(f"Unsupported setup mode: {mode}")
 
@@ -158,15 +167,23 @@ def normalize_selected_records(
     selected_services: list[str],
     intervals: dict[str, Any],
     service_catalog: dict[str, dict[str, Any]],
+    initial_intervals: dict[str, Any] | None = None,
 ) -> bool:
     """Ensure selected services are calculable and never appear as Not set."""
     changed = False
     for key in selected_services:
         definition = service_catalog[key]
         interval = int(intervals.get(key, definition.get("interval", 0)))
+        initial_interval = (initial_intervals or {}).get(
+            key, definition.get("initial_interval")
+        )
         record = records.get(key)
         if record is None:
-            records[key] = ServiceRecord(interval_miles=interval)
+            records[key] = ServiceRecord(
+                interval_miles=interval,
+                due_mileage_override=initial_interval,
+                initial_due_mileage_applied=initial_interval is not None,
+            )
             changed = True
             continue
 
@@ -178,6 +195,21 @@ def normalize_selected_records(
             and record.due_mileage_override is None
         ):
             record.last_completed_mileage = 0
+            changed = True
+        if record.initial_due_mileage_applied:
+            configured_initial = (
+                int(initial_interval) if initial_interval is not None else None
+            )
+            if record.due_mileage_override != configured_initial:
+                record.due_mileage_override = configured_initial
+                changed = True
+        elif (
+            initial_interval is not None
+            and record.last_completed_mileage == 0
+            and record.due_mileage_override is None
+        ):
+            record.due_mileage_override = int(initial_interval)
+            record.initial_due_mileage_applied = True
             changed = True
         if record.interval_miles != interval:
             record.interval_miles = interval
@@ -219,7 +251,11 @@ def migrate_v1_data(
         interval = definition.get("interval")
         last = last_completed.get(key)
         extension = extensions.get(key, 0)
-        due_override = None
+        due_override = (
+            int(definition["initial_interval"])
+            if last is None and definition.get("initial_interval") is not None
+            else None
+        )
         if extension and interval is not None:
             due_override = (last if last is not None else 0) + interval + extension
         record = ServiceRecord(
@@ -229,6 +265,11 @@ def migrate_v1_data(
             due_mileage_override=due_override,
             milestone_completed=key in completed,
             milestone_completed_mileage=None,
+            initial_due_mileage_applied=(
+                due_override is not None
+                and not extension
+                and definition.get("initial_interval") is not None
+            ),
         )
         records[key] = record.as_dict()
     return {
