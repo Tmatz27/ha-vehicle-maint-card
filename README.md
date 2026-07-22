@@ -11,8 +11,10 @@ Each vehicle is configured through the Home Assistant interface and receives its
 - Remembers the last valid odometer reading when the source is temporarily unavailable
 - Creates standardized maintenance entities for each vehicle
 - Selects the complete built-in service and milestone catalog for new vehicles
+- Uses a persistent checklist so multiple services can be added or removed in one pass
 - Starts every selected item as Never performed instead of Not set
 - Allows different service intervals for each vehicle
+- Includes modern Subaru normal-use starting intervals with inspection and condition reminders clearly identified
 - Shows overdue and upcoming maintenance
 - Logs maintenance using the current odometer or an exact earlier mileage
 - Extends maintenance reminders without recording false maintenance
@@ -29,6 +31,8 @@ Each vehicle is configured through the Home Assistant interface and receives its
 - HACS is recommended for installation
 
 If your vehicle reports kilometers, create a Home Assistant conversion sensor that reports miles and select that sensor during setup.
+
+Home Assistant 2026.3 or newer displays the integration's bundled icon. Older supported Home Assistant releases use the generic integration placeholder but retain all maintenance functionality.
 
 ## Installation
 
@@ -59,9 +63,9 @@ After restarting Home Assistant:
 4. Search for **Vehicle Maintenance**.
 5. Enter a display name for the vehicle.
 6. Select the vehicle's odometer sensor.
-7. Review the maintenance services. All built-in services and milestones are selected by default, and you can deselect anything you do not want to track.
-8. Configure optional maintenance notifications.
-9. Review the mileage interval for each selected service.
+7. Review the maintenance checklist. All built-in services and milestones are selected by default. Check or uncheck as many items as needed, then submit the list once.
+8. Review the mileage interval for each selected service.
+9. Configure optional maintenance notifications.
 10. Finish the setup.
 
 Home Assistant creates a separate device for the vehicle.
@@ -80,15 +84,15 @@ Available maintenance items include:
 - Cabin Air Filter
 - Brake Fluid
 - Coolant
-- Transmission Fluid
-- Differential Service
+- CVT Fluid Inspection
+- Differential Fluid Inspection
 - Wiper Blades
 - Battery Check
 - Tire Replacement
 - Spark Plugs
-- Brake Pads
-- Wheel Alignment
-- PCV Valve
+- Brake Pad Inspection
+- Wheel Alignment Check
+- PCV Valve Inspection
 - Fuel Filter
 - Timing Belt or Chain Inspection
 
@@ -102,9 +106,35 @@ Available mileage milestones include:
 - 180,000-mile Service
 - 200,000-mile Service
 
-The default intervals are starting points. Review them against the maintenance schedule for the specific vehicle.
+### Built-in Subaru schedule defaults
 
-Intervals can be changed later under:
+The starting intervals follow the normal-use schedule in Subaru of America's [2024 Warranty and Maintenance Booklet](https://techinfo.subaru.com/stis/doc/warrantyBooklet/2024_war_and_maint_041723.pdf) where Subaru publishes a fixed mileage. The same booklet distinguishes replacement, inspection, and performed items. The integration keeps that distinction instead of presenting every reminder as a required replacement.
+
+| Maintenance item | Default | Meaning |
+|---|---:|---|
+| Oil Change | 6,000 mi | Replace |
+| Tire Rotation | 6,000 mi | Perform and inspect |
+| Engine Air Filter | 30,000 mi | Replace |
+| Cabin Air Filter | 12,000 mi | Replace |
+| Brake Fluid | 30,000 mi | Replace |
+| Coolant | First at 137,500 mi; then 75,000 mi | Replace |
+| CVT Fluid | 30,000 mi | Inspect under normal use |
+| Differential Fluid | 30,000 mi | Inspect under normal use |
+| Spark Plugs | 60,000 mi | Replace |
+| Brake Pads | 12,000 mi | Inspect and replace by wear |
+| Fuel Filter | 72,000 mi | Replace |
+| Wheel Alignment | 12,000 mi | Condition reminder; align when needed |
+| Wiper Blades | 12,000 mi | Condition reminder |
+| Battery | 12,000 mi | Condition reminder |
+| Tire Replacement | 50,000 mi | Planning reminder; replace by tread, age, and condition |
+| PCV Valve | 60,000 mi | Inspection reminder |
+| Timing Belt or Chain | 100,000 mi | Inspection reminder; model dependent |
+
+Subaru specifies shorter intervals for some severe driving conditions. For example, the booklet calls for 3,000-mile oil changes under severe use and approximately 24,855-mile CVT fluid replacement when applicable. Always review the booklet for the exact model, year, engine, location, and driving conditions.
+
+The named mileage milestones are convenience reminders. They do not replace the itemized factory schedule.
+
+Every interval can be changed for each vehicle under:
 
 **Settings → Devices & services → Vehicle Maintenance → Configure**
 

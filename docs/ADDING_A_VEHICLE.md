@@ -19,9 +19,9 @@ If the source reports kilometers, create a miles conversion sensor first.
 3. Search for **Vehicle Maintenance**.
 4. Enter the vehicle display name.
 5. Select its authoritative odometer sensor.
-6. Review the recurring services and mileage milestones. The full catalog is selected by default; deselect only items you do not want to track.
-7. Enable notifications if desired and select the notification action.
-8. Review every service interval on the next screen.
+6. Review the recurring services and mileage milestones in the checklist. The full catalog is selected by default. Check or uncheck every item you want, then submit the list once.
+7. Review every service interval on the next screen.
+8. Enable notifications if desired and select the notification action.
 9. Finish setup.
 
 The odometer sensor cannot be assigned to two Vehicle Maintenance entries. This prevents two vehicle records from accidentally using the same mileage.
@@ -42,7 +42,7 @@ Replace the example entity with the maintenance summary sensor created for the v
 
 ## Begin tracking services
 
-Open **All Maintenance** on the card. Every new item starts as **Never performed** and receives a first due mileage from its configured interval.
+Open **All Maintenance** on the card. Every new item starts as **Never performed** and receives a first due mileage from its configured interval. Coolant uses the modern Subaru first-service mileage of 137,500 miles and a 75,000-mile repeat interval.
 
 For each known service:
 

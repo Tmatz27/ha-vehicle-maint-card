@@ -13,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     ATTR_ENTRY_ID,
     ATTR_SERVICE_KEY,
+    CONF_INITIAL_INTERVALS,
     CONF_SERVICES,
     DEFAULT_UPCOMING_MILES,
     DOMAIN,
@@ -199,7 +200,11 @@ class MaintenanceSensor(VehicleEntity):
             ATTR_ENTRY_ID: self.entry.entry_id,
             ATTR_SERVICE_KEY: self.service_key,
             "service_name": definition["name"],
+            "maintenance_type": definition.get("kind", "service"),
             "interval_miles": record.interval_miles,
+            "initial_interval_miles": self.manager.config.get(
+                CONF_INITIAL_INTERVALS, {}
+            ).get(self.service_key, definition.get("initial_interval")),
             "initialized": record.initialized,
             "status": service_status(
                 record,

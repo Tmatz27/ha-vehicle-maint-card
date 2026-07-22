@@ -1,6 +1,6 @@
 # Legacy v4 package migration
 
-This is legacy migration guidance for the previously used v4 YAML package. The runtime integration remains vehicle-neutral. Keep the package active while comparing values; the integration stores the current record and last completion, **not** a lifetime event history.
+This is legacy migration guidance for the previously used v4 YAML package. The integration's built-in defaults target modern U.S.-market Subarus, but every interval remains editable per vehicle. Keep the package active while comparing values; the integration stores the current record and last completion, **not** a lifetime event history.
 
 ## Meaning of old values
 

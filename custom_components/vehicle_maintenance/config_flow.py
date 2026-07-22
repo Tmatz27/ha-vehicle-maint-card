@@ -11,6 +11,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfLength
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_INITIAL_INTERVALS,
     CONF_INTERVALS,
     CONF_NOTIFY_ENABLED,
     CONF_NOTIFY_SERVICE,
@@ -29,19 +30,38 @@ from .const import (
 )
 
 
-def _service_selector(default: list[str]):
+def _service_label(definition: dict) -> str:
+    name = definition["name"]
+    interval = int(definition["interval"])
+    initial = definition.get("initial_interval")
+    if definition.get("milestone"):
+        return f"{name} (one-time milestone)"
+    if initial is not None:
+        return f"{name} (first at {initial:,} mi; then every {interval:,} mi)"
+    action = {
+        "condition": "condition reminder",
+        "inspect": "inspect",
+        "perform": "perform",
+        "replace": "replace",
+    }.get(definition.get("kind"), "service")
+    return f"{name} ({action} every {interval:,} mi)"
+
+
+def _service_selector() -> selector.SelectSelector:
     options = [
-        selector.SelectOptionDict(value=key, label=value["name"])
+        selector.SelectOptionDict(value=key, label=_service_label(value))
         for key, value in SERVICE_CATALOG.items()
     ]
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
-            options=options, multiple=True, mode=selector.SelectSelectorMode.DROPDOWN
+            options=options,
+            multiple=True,
+            mode=selector.SelectSelectorMode.LIST,
         )
     )
 
 
-def _base_schema(defaults: dict, *, include_name: bool) -> vol.Schema:
+def _vehicle_schema(defaults: dict, *, include_name: bool) -> vol.Schema:
     fields = {}
     if include_name:
         fields[
@@ -55,29 +75,21 @@ def _base_schema(defaults: dict, *, include_name: bool) -> vol.Schema:
     fields[odometer_marker] = selector.EntitySelector(
         selector.EntitySelectorConfig(domain="sensor")
     )
-    fields[
-        vol.Required(
-            CONF_SERVICES, default=defaults.get(CONF_SERVICES, DEFAULT_SERVICES)
-        )
-    ] = _service_selector(defaults.get(CONF_SERVICES, DEFAULT_SERVICES))
-    fields[
-        vol.Required(
-            CONF_NOTIFY_ENABLED, default=defaults.get(CONF_NOTIFY_ENABLED, False)
-        )
-    ] = selector.BooleanSelector()
-    fields[
-        vol.Optional(CONF_NOTIFY_SERVICE, default=defaults.get(CONF_NOTIFY_SERVICE, ""))
-    ] = selector.TextSelector()
-    fields[
-        vol.Optional(
-            CONF_NOTIFY_THRESHOLD,
-            default=defaults.get(CONF_NOTIFY_THRESHOLD, DEFAULT_NOTIFICATION_THRESHOLD),
-        )
-    ] = selector.NumberSelector(
-        selector.NumberSelectorConfig(
-            min=0, max=10000, step=100, mode=selector.NumberSelectorMode.BOX
-        )
+    return vol.Schema(fields)
+
+
+def _services_schema(defaults: dict) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_SERVICES,
+                default=defaults.get(CONF_SERVICES, DEFAULT_SERVICES),
+            ): _service_selector()
+        }
     )
+
+
+def _notification_schema(defaults: dict) -> vol.Schema:
     weekdays = [
         ("mon", "Monday"),
         ("tue", "Tuesday"),
@@ -87,44 +99,86 @@ def _base_schema(defaults: dict, *, include_name: bool) -> vol.Schema:
         ("sat", "Saturday"),
         ("sun", "Sunday"),
     ]
-    fields[
-        vol.Required(
-            CONF_NOTIFY_WEEKDAY,
-            default=defaults.get(CONF_NOTIFY_WEEKDAY, DEFAULT_NOTIFICATION_WEEKDAY),
-        )
-    ] = selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[
-                selector.SelectOptionDict(value=value, label=label)
-                for value, label in weekdays
-            ]
-        )
-    )
-    fields[
-        vol.Required(
-            CONF_NOTIFY_TIME,
-            default=defaults.get(CONF_NOTIFY_TIME, DEFAULT_NOTIFICATION_TIME),
-        )
-    ] = selector.TimeSelector()
-    return vol.Schema(fields)
-
-
-def _interval_schema(services: list[str], current: dict) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(
-                f"interval_{key}",
-                default=int(
-                    current.get(key, SERVICE_CATALOG[key].get("interval") or 1)
+                CONF_NOTIFY_ENABLED,
+                default=defaults.get(CONF_NOTIFY_ENABLED, False),
+            ): selector.BooleanSelector(),
+            vol.Optional(
+                CONF_NOTIFY_SERVICE,
+                default=defaults.get(CONF_NOTIFY_SERVICE, ""),
+            ): selector.TextSelector(),
+            vol.Optional(
+                CONF_NOTIFY_THRESHOLD,
+                default=defaults.get(
+                    CONF_NOTIFY_THRESHOLD, DEFAULT_NOTIFICATION_THRESHOLD
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=1, max=500000, step=1, mode=selector.NumberSelectorMode.BOX
+                    min=0,
+                    max=10000,
+                    step=100,
+                    mode=selector.NumberSelectorMode.BOX,
                 )
-            )
-            for key in services
+            ),
+            vol.Required(
+                CONF_NOTIFY_WEEKDAY,
+                default=defaults.get(CONF_NOTIFY_WEEKDAY, DEFAULT_NOTIFICATION_WEEKDAY),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(value=value, label=label)
+                        for value, label in weekdays
+                    ]
+                )
+            ),
+            vol.Required(
+                CONF_NOTIFY_TIME,
+                default=defaults.get(CONF_NOTIFY_TIME, DEFAULT_NOTIFICATION_TIME),
+            ): selector.TimeSelector(),
         }
     )
+
+
+def _interval_schema(
+    services: list[str], current: dict, current_initial: dict
+) -> vol.Schema:
+    fields = {}
+    number_selector = selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=1,
+            max=500000,
+            step=1,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    )
+    for key in services:
+        definition = SERVICE_CATALOG[key]
+        if initial := definition.get("initial_interval"):
+            fields[
+                vol.Required(
+                    f"initial_interval_{key}",
+                    default=int(current_initial.get(key, initial)),
+                )
+            ] = number_selector
+        fields[
+            vol.Required(
+                f"interval_{key}",
+                default=int(current.get(key, definition.get("interval") or 1)),
+            )
+        ] = number_selector
+    return vol.Schema(fields)
+
+
+def _selected_initial_intervals(
+    services: list[str], user_input: dict
+) -> dict[str, int]:
+    return {
+        key: int(user_input[f"initial_interval_{key}"])
+        for key in services
+        if SERVICE_CATALOG[key].get("initial_interval") is not None
+    }
 
 
 def _normalize_time(value) -> str:
@@ -134,7 +188,7 @@ def _normalize_time(value) -> str:
     return value if value.count(":") == 2 else f"{value}:00"
 
 
-def _input_errors(hass, user_input: dict, entries, current_entry_id=None) -> dict:
+def _vehicle_errors(hass, user_input: dict, entries, current_entry_id=None) -> dict:
     errors = {}
     source = user_input[CONF_ODOMETER_ENTITY]
     if any(
@@ -157,6 +211,11 @@ def _input_errors(hass, user_input: dict, entries, current_entry_id=None) -> dic
                 float(state.state)
             except (TypeError, ValueError):
                 errors[CONF_ODOMETER_ENTITY] = "odometer_not_numeric"
+    return errors
+
+
+def _notification_errors(hass, user_input: dict) -> dict:
+    errors = {}
     if user_input.get(CONF_NOTIFY_ENABLED):
         target = str(user_input.get(CONF_NOTIFY_SERVICE, "")).strip()
         if "." not in target:
@@ -169,26 +228,47 @@ def _input_errors(hass, user_input: dict, entries, current_entry_id=None) -> dic
 
 
 class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._pending: dict = {}
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
-            errors = _input_errors(
+            errors = _vehicle_errors(
                 self.hass, user_input, self._async_current_entries()
             )
             if errors:
                 return self.async_show_form(
                     step_id="user",
-                    data_schema=_base_schema(user_input, include_name=True),
+                    data_schema=_vehicle_schema(user_input, include_name=True),
                     errors=errors,
                 )
             self._pending = dict(user_input)
+            return await self.async_step_services()
+        return self.async_show_form(
+            step_id="user",
+            data_schema=_vehicle_schema({}, include_name=True),
+        )
+
+    async def async_step_services(self, user_input=None):
+        if user_input is not None:
+            selected = list(user_input.get(CONF_SERVICES, []))
+            if not selected:
+                return self.async_show_form(
+                    step_id="services",
+                    data_schema=_services_schema(user_input),
+                    errors={"base": "select_at_least_one_service"},
+                    description_placeholders={
+                        "vehicle": self._pending[CONF_VEHICLE_NAME]
+                    },
+                )
+            self._pending[CONF_SERVICES] = selected
             return await self.async_step_intervals()
         return self.async_show_form(
-            step_id="user", data_schema=_base_schema({}, include_name=True)
+            step_id="services",
+            data_schema=_services_schema(self._pending),
+            description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
         )
 
     async def async_step_intervals(self, user_input=None):
@@ -197,14 +277,37 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 key: int(user_input[f"interval_{key}"])
                 for key in self._pending[CONF_SERVICES]
             }
+            self._pending[CONF_INITIAL_INTERVALS] = _selected_initial_intervals(
+                self._pending[CONF_SERVICES], user_input
+            )
+            return await self.async_step_notifications()
+        return self.async_show_form(
+            step_id="intervals",
+            data_schema=_interval_schema(self._pending[CONF_SERVICES], {}, {}),
+            description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
+        )
+
+    async def async_step_notifications(self, user_input=None):
+        if user_input is not None:
+            errors = _notification_errors(self.hass, user_input)
+            if errors:
+                return self.async_show_form(
+                    step_id="notifications",
+                    data_schema=_notification_schema(user_input),
+                    errors=errors,
+                    description_placeholders={
+                        "vehicle": self._pending[CONF_VEHICLE_NAME]
+                    },
+                )
+            self._pending.update(user_input)
             self._pending[CONF_NOTIFY_TIME] = _normalize_time(
                 self._pending[CONF_NOTIFY_TIME]
             )
             title = self._pending[CONF_VEHICLE_NAME]
             return self.async_create_entry(title=title, data=self._pending)
         return self.async_show_form(
-            step_id="intervals",
-            data_schema=_interval_schema(self._pending[CONF_SERVICES], {}),
+            step_id="notifications",
+            data_schema=_notification_schema({}),
             description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
         )
 
@@ -217,12 +320,13 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         self._entry = config_entry
         self._pending: dict = {}
+        self._current: dict = {}
 
     async def async_step_init(self, user_input=None):
-        current = {**self._entry.data, **self._entry.options}
-        defaults = {**current, CONF_VEHICLE_NAME: self._entry.title}
+        self._current = {**self._entry.data, **self._entry.options}
+        defaults = {**self._current, CONF_VEHICLE_NAME: self._entry.title}
         if user_input is not None:
-            errors = _input_errors(
+            errors = _vehicle_errors(
                 self.hass,
                 user_input,
                 self.hass.config_entries.async_entries(DOMAIN),
@@ -231,22 +335,69 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
             if errors:
                 return self.async_show_form(
                     step_id="init",
-                    data_schema=_base_schema(user_input, include_name=True),
+                    data_schema=_vehicle_schema(user_input, include_name=True),
                     errors=errors,
                 )
             self._pending = dict(user_input)
+            return await self.async_step_services()
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_vehicle_schema(defaults, include_name=True),
+        )
+
+    async def async_step_services(self, user_input=None):
+        if user_input is not None:
+            selected = list(user_input.get(CONF_SERVICES, []))
+            if not selected:
+                return self.async_show_form(
+                    step_id="services",
+                    data_schema=_services_schema(user_input),
+                    errors={"base": "select_at_least_one_service"},
+                    description_placeholders={
+                        "vehicle": self._pending[CONF_VEHICLE_NAME]
+                    },
+                )
+            self._pending[CONF_SERVICES] = selected
             return await self.async_step_intervals()
         return self.async_show_form(
-            step_id="init", data_schema=_base_schema(defaults, include_name=True)
+            step_id="services",
+            data_schema=_services_schema(self._current),
+            description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
         )
 
     async def async_step_intervals(self, user_input=None):
-        current = {**self._entry.data, **self._entry.options}
         if user_input is not None:
             self._pending[CONF_INTERVALS] = {
                 key: int(user_input[f"interval_{key}"])
                 for key in self._pending[CONF_SERVICES]
             }
+            self._pending[CONF_INITIAL_INTERVALS] = _selected_initial_intervals(
+                self._pending[CONF_SERVICES], user_input
+            )
+            return await self.async_step_notifications()
+        return self.async_show_form(
+            step_id="intervals",
+            data_schema=_interval_schema(
+                self._pending[CONF_SERVICES],
+                self._current.get(CONF_INTERVALS, {}),
+                self._current.get(CONF_INITIAL_INTERVALS, {}),
+            ),
+            description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
+        )
+
+    async def async_step_notifications(self, user_input=None):
+        if user_input is not None:
+            errors = _notification_errors(self.hass, user_input)
+            if errors:
+                return self.async_show_form(
+                    step_id="notifications",
+                    data_schema=_notification_schema(user_input),
+                    errors=errors,
+                    description_placeholders={
+                        "vehicle": self._pending[CONF_VEHICLE_NAME]
+                    },
+                )
+            self._pending.update(user_input)
             self._pending[CONF_NOTIFY_TIME] = _normalize_time(
                 self._pending[CONF_NOTIFY_TIME]
             )
@@ -254,9 +405,7 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
             self.hass.config_entries.async_update_entry(self._entry, title=name)
             return self.async_create_entry(title="", data=self._pending)
         return self.async_show_form(
-            step_id="intervals",
-            data_schema=_interval_schema(
-                self._pending[CONF_SERVICES], current.get(CONF_INTERVALS, {})
-            ),
+            step_id="notifications",
+            data_schema=_notification_schema(self._current),
             description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
         )

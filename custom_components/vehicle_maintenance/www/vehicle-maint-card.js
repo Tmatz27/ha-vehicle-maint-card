@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.1.1";
+const CARD_VERSION = "0.1.2";
 const DOMAIN = "vehicle_maintenance";
 const DEFAULT_UPCOMING_MILES = 2000;
 const DEFAULT_EXTEND_MILES = 1000;
@@ -106,8 +106,7 @@ const isNeverPerformed = (entity) => {
   const attributes = entity?.attributes || {};
   if (!attributes.initialized) return true;
   return !attributes.milestone_completed
-    && finiteNumber(attributes.last_completed_mileage) === 0
-    && finiteNumber(attributes.due_mileage_override) === null;
+    && finiteNumber(attributes.last_completed_mileage) === 0;
 };
 
 const servicePresentation = (entity, odometer, upcomingMiles = DEFAULT_UPCOMING_MILES) => {
@@ -364,11 +363,20 @@ class VehicleMaintCard extends HTMLElement {
     const due = finiteNumber(attributes.scheduled_due_mileage);
     const target = finiteNumber(attributes.snoozed_until_mileage);
     const neverPerformed = isNeverPerformed(entity);
+    const initialInterval = positiveNumber(attributes.initial_interval_miles);
+    const typeLabel = {
+      condition: "Condition reminder",
+      inspect: "Inspection",
+      milestone: "Mileage milestone",
+      perform: "Scheduled service",
+      replace: "Replacement",
+    }[attributes.maintenance_type] || "Maintenance";
     return `<div class="backdrop"><section class="panel" role="dialog" aria-modal="true" aria-labelledby="maintenance-dialog-title" tabindex="-1">
-      <header><div><small>Maintenance</small><h2 id="maintenance-dialog-title">${esc(attributes.service_name)}</h2></div><button class="close" aria-label="Close maintenance actions">×</button></header>
+      <header><div><small>${esc(typeLabel)}</small><h2 id="maintenance-dialog-title">${esc(attributes.service_name)}</h2></div><button class="close" aria-label="Close maintenance actions">×</button></header>
       <div class="facts">
         ${this.fact("Current odometer", odometer === null ? "Unavailable" : `${formatNumber(odometer)} mi`)}
-        ${this.fact("Interval", interval === null ? "Unavailable" : `${formatNumber(interval)} mi`)}
+        ${this.fact(initialInterval === null ? "Interval" : "Repeat interval", interval === null ? "Unavailable" : `${formatNumber(interval)} mi`)}
+        ${initialInterval === null ? "" : this.fact("First due", `${formatNumber(initialInterval)} mi`)}
         ${this.fact("Next due", due === null ? (neverPerformed ? "Never performed" : "Unavailable") : `${formatNumber(due)} mi`)}
         ${target !== null && attributes.deferred ? this.fact("Extended until", `${formatNumber(target)} mi`) : ""}
       </div>

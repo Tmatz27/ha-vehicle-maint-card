@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.1.1 - next release candidate
+## 0.1.2 - next release candidate
+
+- Added local integration artwork for Home Assistant 2026.3 and newer.
+- Replaced unsupported Spark Plugs and Wheel Alignment icons with reliable Material Design icons.
+- Reworked vehicle setup and options into focused screens with a persistent multi-select service checklist.
+- Updated normal-use starting intervals to match recent U.S.-market Subaru guidance while labeling inspection and condition reminders honestly.
+- Added separate first and repeat coolant intervals: first due at 137,500 miles, then every 75,000 miles.
+- Migrated untouched older defaults while preserving customized per-vehicle intervals.
+
+## 0.1.1 - 2026-07-21
 
 - Restored each vehicle to Devices & Services as a standard device integration with Configure and Delete controls.
 - Selected the complete built-in maintenance catalog by default for new vehicles.
