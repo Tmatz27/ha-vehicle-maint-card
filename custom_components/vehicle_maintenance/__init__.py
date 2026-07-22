@@ -45,7 +45,7 @@ from .model import (
 )
 
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.0"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.1"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -130,7 +130,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def reset_service(call: ServiceCall) -> None:
         manager = manager_for(call)
-        initialize_service(record_for(manager, call.data["service"]), "not_set")
+        initialize_service(
+            record_for(manager, call.data["service"]), "never_performed"
+        )
         await manager.async_save()
 
     async def set_effective_odometer(call: ServiceCall) -> None:
@@ -268,6 +270,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove the persisted maintenance records for a deleted vehicle."""
+    manager = VehicleManager(hass, entry)
+    await manager.store.async_remove()
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
