@@ -19,7 +19,12 @@ from .const import (
     SERVICE_CATALOG,
     SIGNAL_UPDATE,
 )
-from .model import ServiceRecord, accepted_odometer, migrate_storage_data
+from .model import (
+    ServiceRecord,
+    accepted_odometer,
+    migrate_storage_data,
+    normalize_selected_records,
+)
 
 STORAGE_VERSION = 2
 
@@ -67,22 +72,18 @@ class VehicleManager:
             key: ServiceRecord.from_dict(value)
             for key, value in stored.get("services", {}).items()
         }
-        self._ensure_selected_records()
+        records_changed = self._ensure_selected_records()
+        if records_changed:
+            await self.async_save()
         await self.async_refresh_odometer(save=True)
 
-    def _ensure_selected_records(self) -> None:
-        intervals = self.config.get(CONF_INTERVALS, {})
-        for key in self.config[CONF_SERVICES]:
-            definition = SERVICE_CATALOG[key]
-            record = self.records.get(key)
-            if record is None:
-                record = ServiceRecord(
-                    initialized=bool(definition.get("milestone"))
-                )
-                self.records[key] = record
-            record.interval_miles = int(
-                intervals.get(key, definition.get("interval", 0))
-            )
+    def _ensure_selected_records(self) -> bool:
+        return normalize_selected_records(
+            self.records,
+            self.config[CONF_SERVICES],
+            self.config.get(CONF_INTERVALS, {}),
+            SERVICE_CATALOG,
+        )
 
     async def async_start(self) -> None:
         if self._unsub_odometer is not None:

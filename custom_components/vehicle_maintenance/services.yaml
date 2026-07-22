@@ -48,7 +48,6 @@ set_maintenance:
       selector:
         select:
           options:
-            - {label: Not set, value: not_set}
             - {label: Never performed, value: never_performed}
             - {label: Last completed at mileage, value: last_completed}
             - {label: Due at known mileage, value: due_at}
@@ -59,7 +58,7 @@ set_maintenance:
 
 reset_service:
   name: Reset service
-  description: Return a service, including a milestone, to Not set.
+  description: Return a service, including a milestone, to Never performed.
   fields:
     entry_id: *entry
     service: *service

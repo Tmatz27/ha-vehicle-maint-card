@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.1.0 - next release candidate
+## 0.1.1 - next release candidate
+
+- Restored each vehicle to Devices & Services as a standard device integration with Configure and Delete controls.
+- Selected the complete built-in maintenance catalog by default for new vehicles.
+- Replaced Not set records with a consistent Never performed starting state.
+- Centered the maintenance action dialog on desktop and mobile screens.
+- Added an optional card accent color with a visual color picker and Home Assistant theme fallback.
+- Removed persisted vehicle maintenance data when its integration entry is deleted.
+
+## 0.1.0 - 2026-07-21
 
 - Fixed startup on supported Home Assistant versions by using a `Store` subclass migration hook.
 - Preserved version-1 completion, extension, milestone, and cached-odometer data.

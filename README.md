@@ -10,7 +10,8 @@ Each vehicle is configured through the Home Assistant interface and receives its
 - Uses an existing Home Assistant odometer sensor
 - Remembers the last valid odometer reading when the source is temporarily unavailable
 - Creates standardized maintenance entities for each vehicle
-- Includes common recurring maintenance services and mileage milestones
+- Selects the complete built-in service and milestone catalog for new vehicles
+- Starts every selected item as Never performed instead of Not set
 - Allows different service intervals for each vehicle
 - Shows overdue and upcoming maintenance
 - Logs maintenance using the current odometer or an exact earlier mileage
@@ -18,6 +19,7 @@ Each vehicle is configured through the Home Assistant interface and receives its
 - Provides Due Soon and All Maintenance views
 - Includes optional scheduled notifications
 - Includes a mobile-friendly dashboard card
+- Supports a per-card accent color or the active Home Assistant theme color
 - Requires no additional custom dashboard cards
 
 ## Requirements
@@ -57,12 +59,14 @@ After restarting Home Assistant:
 4. Search for **Vehicle Maintenance**.
 5. Enter a display name for the vehicle.
 6. Select the vehicle's odometer sensor.
-7. Select the maintenance services you want to track.
+7. Review the maintenance services. All built-in services and milestones are selected by default, and you can deselect anything you do not want to track.
 8. Configure optional maintenance notifications.
 9. Review the mileage interval for each selected service.
 10. Finish the setup.
 
 Home Assistant creates a separate device for the vehicle.
+
+Every selected service starts as **Never performed**. The integration immediately calculates its first due mileage from the configured interval. Log the most recent factual completion mileage when one is known.
 
 Repeat these steps for every additional vehicle. Each vehicle remains independent, so logging or extending maintenance for one vehicle does not affect another.
 
@@ -117,7 +121,8 @@ The visual editor is the easiest way to add the card.
 5. Select the vehicle.
 6. Set the Due Soon mileage window.
 7. Set the default maintenance extension amount.
-8. Save the card.
+8. Optionally choose a custom card accent color. Leave it on the Home Assistant theme setting to follow your dashboard theme.
+9. Save the card.
 
 The card automatically uses the selected vehicle's maintenance entities.
 
@@ -145,6 +150,7 @@ type: custom:vehicle-maint-card
 main_entity: sensor.outback_maintenance
 upcoming_miles: 2000
 extend_miles: 1000
+accent_color: "#43a047"
 ```
 
 ### Card configuration
@@ -155,6 +161,7 @@ extend_miles: 1000
 | `main_entity` | Yes | None | The vehicle's main maintenance summary sensor |
 | `upcoming_miles` | No | `2000` | How many miles ahead appear in Due Soon |
 | `extend_miles` | No | `1000` | Default amount offered by Extend Maintenance |
+| `accent_color` | No | Home Assistant theme | Six-digit hex color used for the card accent, such as `"#43a047"` for green |
 
 The card intentionally has very few configuration options. Vehicle name, odometer source, maintenance services, intervals, and notifications are managed through the integration rather than duplicated in dashboard YAML.
 
@@ -169,11 +176,13 @@ cards:
     main_entity: sensor.outback_maintenance
     upcoming_miles: 2000
     extend_miles: 1000
+    accent_color: "#1976d2"
 
   - type: custom:vehicle-maint-card
     main_entity: sensor.forester_maintenance
     upcoming_miles: 2000
     extend_miles: 1000
+    accent_color: "#43a047"
 ```
 
 Each card automatically finds the maintenance entities belonging to its selected vehicle.
@@ -200,7 +209,7 @@ All Maintenance displays every selected maintenance item, including:
 - Overdue maintenance
 - Maintenance with an active extension
 - Completed mileage milestones
-- Services that have not been logged yet
+- Services marked Never performed
 
 An extended item remains visible here and shows the mileage when it will require attention again.
 
@@ -274,11 +283,11 @@ Extending maintenance:
 
 An active extension can be cleared from the same Extend Maintenance section.
 
-## Services that have not been logged
+## Never performed services
 
-A newly configured service may display **Not logged yet**.
+A newly configured service displays **Never performed** until maintenance is logged.
 
-This means the integration does not have enough information to calculate its next due mileage. It does not assume the service was completed at zero miles.
+This is a starting state, not a fabricated completion. Its first due mileage is the configured interval. For example, a new oil-change record with a 6,000-mile interval is first due at 6,000 miles. If the vehicle is already beyond that mileage, the card correctly shows the item as overdue and still identifies it as Never performed.
 
 To begin tracking it:
 
@@ -286,7 +295,7 @@ To begin tracking it:
 2. Select **Log Maintenance**.
 3. Use the current odometer or enter the mileage when it was most recently completed.
 
-If the previous completion mileage is unknown, leave the service unlogged until accurate information is available.
+If the previous completion mileage is unknown, leave the item as Never performed. When a factual mileage becomes available, log it using the current odometer or enter the exact earlier mileage.
 
 ## Odometer behavior
 
@@ -412,6 +421,10 @@ You can change:
 
 Deselecting a maintenance service removes it from the active card and notifications. Its saved maintenance value is retained in case the service is enabled again later.
 
+### Delete a vehicle
+
+Each vehicle appears as its own entry under **Settings > Devices & services > Vehicle Maintenance**. Open the vehicle's menu and select **Delete** to remove that vehicle, its entities, and its stored maintenance records. Deleting one vehicle does not affect any other vehicle.
+
 ## Migrating from a YAML package
 
 Do not immediately delete the existing maintenance package.
@@ -430,7 +443,7 @@ For each vehicle:
 10. Disable the old package notification automation.
 11. Keep the old package as a backup until the new integration has been verified.
 
-A value of zero in an old helper should not automatically be imported as a completed service. If the actual completion mileage is unknown, leave the service as Not logged yet.
+A value of zero in an old helper should not automatically be imported as a completed service. If the actual completion mileage is unknown, leave the service as Never performed.
 
 See [`docs/MIGRATION.md`](docs/MIGRATION.md) for the complete migration checklist.
 
@@ -517,7 +530,7 @@ Keep receipts and complete service records in a dedicated document or vehicle-re
 
 Before removing a vehicle entry, record any maintenance values you want to preserve.
 
-Removing the integration entry removes that vehicle's entities from Home Assistant. Reinstalling the integration does not guarantee that deleted vehicle data can be recovered.
+Removing the integration entry removes that vehicle's entities and persisted maintenance records from Home Assistant. Deletion is permanent, so record any values you want to preserve first.
 
 ## License
 

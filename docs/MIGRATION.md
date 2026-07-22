@@ -4,8 +4,7 @@ This is legacy migration guidance for the previously used v4 YAML package. The r
 
 ## Meaning of old values
 
-- A helper value of `0` with unknown history stays **Not set**. Zero is not automatically a completion.
-- Choose **Never performed** only when that is factually known.
+- A helper value of `0` with unknown history stays **Never performed**. Zero is not imported as a factual completion.
 - Choose **Last completed at mileage** only for a factual completion.
 - If the old Extend action changed a last-completed helper, it is no longer factual. Calculate the known effective next-due mileage and choose **Due at known mileage**.
 - Never invent a completion mileage to obtain a desired due mileage.
@@ -87,7 +86,7 @@ action: vehicle_maintenance.set_maintenance
 data:
   entry_id: REPLACE_CONFIG_ENTRY_ID
   service: wiper_blades
-  mode: not_set
+  mode: never_performed
 ```
 
 ## Retiring the package after verification

@@ -12,11 +12,14 @@ const cardPath = path.join(__dirname, "../../custom_components/vehicle_maintenan
 const source = fs.readFileSync(cardPath, "utf8");
 const {
   VehicleMaintCard,
+  accentTextColor,
   completionDetails,
   extensionDetails,
   finiteNumber,
   isDueSoonService,
+  isNeverPerformed,
   normalizeConfig,
+  normalizeAccentColor,
   positiveNumber,
   servicePresentation,
 } = require(cardPath);
@@ -39,6 +42,16 @@ test("public config uses extend_miles with a legacy alias", () => {
   assert.equal(normalizeConfig({ snooze_miles: 500 }).extend_miles, 500);
   assert.equal(normalizeConfig({ extend_miles: 2000, snooze_miles: 500 }).extend_miles, 2000);
   assert.equal("snooze_miles" in normalizeConfig({ snooze_miles: 500 }), false);
+});
+
+test("accent colors are normalized safely and choose readable button text", () => {
+  assert.equal(normalizeAccentColor(" #43A047 "), "#43a047");
+  assert.equal(normalizeAccentColor("green"), null);
+  assert.equal(normalizeAccentColor("#fff; color: red"), null);
+  assert.equal(normalizeConfig({ accent_color: "#43A047" }).accent_color, "#43a047");
+  assert.equal("accent_color" in normalizeConfig({ accent_color: "invalid" }), false);
+  assert.equal(accentTextColor("#ffffff"), "#111111");
+  assert.equal(accentTextColor("#1b5e20"), "#ffffff");
 });
 
 test("completion preview uses the exact entered mileage", () => {
@@ -92,13 +105,30 @@ test("extended row shows its target instead of a strange negative result", () =>
   assert.equal(display.badge, "1,000 mi");
 });
 
+test("never-performed services are explicit and still have a calculated schedule", () => {
+  const entity = {
+    attributes: {
+      initialized: true,
+      last_completed_mileage: 0,
+      due_mileage_override: null,
+      miles_remaining: -1000,
+      status: "overdue",
+    },
+  };
+  assert.equal(isNeverPerformed(entity), true);
+  assert.deepEqual(servicePresentation(entity, 7000), {
+    kind: "overdue",
+    detail: "Never performed · 1,000 mi overdue",
+    badge: "OVERDUE",
+  });
+});
+
 test("normal card source does not expose internal record editing", () => {
   for (const forbidden of [
     "Set maintenance history",
     "Apply history",
     "Advanced record editing",
     "Record state",
-    "Never performed",
     "Due at known mileage",
     "apply-setup",
     "setup-mode",
@@ -107,6 +137,14 @@ test("normal card source does not expose internal record editing", () => {
   }
   assert.equal(source.includes("Log Maintenance"), true);
   assert.equal(source.includes("Extend Maintenance"), true);
+});
+
+test("maintenance dialog is centered and the editor exposes accent color", () => {
+  assert.equal(source.includes("align-items:center"), true);
+  assert.equal(source.includes("align-items:flex-end"), false);
+  assert.equal(source.includes("--vm-accent"), true);
+  assert.equal(source.includes("Card accent color"), true);
+  assert.equal(source.includes("Use Home Assistant theme"), true);
 });
 
 test("unrelated state changes do not trigger a card rebuild", () => {

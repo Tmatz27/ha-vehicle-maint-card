@@ -131,17 +131,7 @@ SERVICE_CATALOG = {
     },
 }
 
-DEFAULT_SERVICES = [
-    "oil_change",
-    "tire_rotation",
-    "engine_air_filter",
-    "cabin_air_filter",
-    "brake_fluid",
-    "coolant",
-    "transmission_fluid",
-    "differential_service",
-    "wiper_blades",
-    "battery_check",
-    "tire_replacement",
-    "spark_plugs",
-]
+# New vehicles start with the complete built-in catalog selected. Existing vehicles
+# keep their explicit selections so an update never re-enables a service the user
+# intentionally disabled.
+DEFAULT_SERVICES = list(SERVICE_CATALOG)

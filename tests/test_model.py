@@ -21,10 +21,12 @@ def test_multiple_vehicle_records_are_isolated():
     assert second.last_completed_mileage == 10000
 
 
-def test_missing_history_requires_setup():
+def test_new_record_starts_as_never_performed():
     record = ServiceRecord(interval_miles=6000)
-    assert model.service_status(record, 44973) == "setup_required"
-    assert model.miles_remaining(record, 44973) is None
+    assert record.initialized
+    assert record.last_completed_mileage == 0
+    assert model.scheduled_due_mileage(record) == 6000
+    assert model.service_status(record, 44973) == "overdue"
 
 
 def test_log_current_and_historical_mileage():
@@ -104,7 +106,8 @@ def test_version_one_migration_preserves_effective_due_override():
     assert migrated["cached_odometer"] == 44973
     assert oil.due_mileage_override == 47000
     assert oil.snoozed_until_mileage is None
-    assert not unset.initialized
+    assert unset.initialized
+    assert unset.last_completed_mileage == 0
     assert migrated["services"]["30k"]["milestone_completed"]
 
 
@@ -112,7 +115,7 @@ def test_notification_sorting_and_formatting():
     records = {
         "soon": ServiceRecord(True, 44000, 2000),
         "late": ServiceRecord(True, 30000, 10000),
-        "unset": ServiceRecord(interval_miles=1000),
+        "unset": ServiceRecord(False, None, 1000),
     }
     catalog = {
         "soon": {"name": "Soon", "interval": 2000},
@@ -144,15 +147,20 @@ def test_storage_migration_versions_and_future_rejection():
 
     current = {"cached_odometer": 123, "services": {}}
     assert migrate_storage_data(2, current, catalog) is current
-    assert migrate_storage_data(1, None, catalog) == {"cached_odometer": None, "services": {"oil": {
-        "initialized": False,
-        "last_completed_mileage": None,
-        "interval_miles": 6000,
-        "due_mileage_override": None,
-        "snoozed_until_mileage": None,
-        "milestone_completed": False,
-        "milestone_completed_mileage": None,
-    }}}
+    assert migrate_storage_data(1, None, catalog) == {
+        "cached_odometer": None,
+        "services": {
+            "oil": {
+                "initialized": True,
+                "last_completed_mileage": 0,
+                "interval_miles": 6000,
+                "due_mileage_override": None,
+                "snoozed_until_mileage": None,
+                "milestone_completed": False,
+                "milestone_completed_mileage": None,
+            }
+        },
+    }
     import pytest
     with pytest.raises(ValueError, match="Unsupported storage version"):
         migrate_storage_data(99, current, catalog)
@@ -170,3 +178,39 @@ def test_service_argument_validation():
     model.validate_setup_arguments("never_performed", None)
     with pytest.raises(ValueError, match="Mileage is required"):
         model.validate_setup_arguments("last_completed", None)
+
+
+def test_selected_records_never_remain_uninitialized():
+    records = {
+        "legacy": ServiceRecord(False, None, 12000),
+        "completed": ServiceRecord(True, 43000, 6000),
+    }
+    catalog = {
+        "new": {"interval": 5000},
+        "legacy": {"interval": 12000},
+        "completed": {"interval": 6000},
+    }
+
+    changed = model.normalize_selected_records(
+        records,
+        ["new", "legacy", "completed"],
+        {"new": 7500},
+        catalog,
+    )
+
+    assert changed
+    assert records["new"] == ServiceRecord(interval_miles=7500)
+    assert records["legacy"].initialized
+    assert records["legacy"].last_completed_mileage == 0
+    assert records["completed"].last_completed_mileage == 43000
+
+
+def test_legacy_not_set_action_maps_to_never_performed():
+    record = ServiceRecord(True, 43000, 6000, snoozed_until_mileage=50000)
+
+    model.initialize_service(record, "not_set")
+
+    assert record.initialized
+    assert record.last_completed_mileage == 0
+    assert record.due_mileage_override is None
+    assert record.snoozed_until_mileage is None

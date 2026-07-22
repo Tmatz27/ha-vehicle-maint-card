@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.1.0";
+const CARD_VERSION = "0.1.1";
 const DOMAIN = "vehicle_maintenance";
 const DEFAULT_UPCOMING_MILES = 2000;
 const DEFAULT_EXTEND_MILES = 1000;
@@ -36,15 +36,35 @@ const formatNumber = (value, fallback = "Unavailable") => {
   return parsed === null ? fallback : parsed.toLocaleString();
 };
 
+const normalizeAccentColor = (value) => {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : null;
+};
+
+const accentTextColor = (value) => {
+  const color = normalizeAccentColor(value);
+  if (color === null) return "var(--text-primary-color)";
+  const red = Number.parseInt(color.slice(1, 3), 16);
+  const green = Number.parseInt(color.slice(3, 5), 16);
+  const blue = Number.parseInt(color.slice(5, 7), 16);
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+  return brightness >= 150 ? "#111111" : "#ffffff";
+};
+
 const normalizeConfig = (config = {}) => {
   const { snooze_miles: legacyExtendMiles, ...rest } = config;
-  return {
+  const normalized = {
     ...rest,
     upcoming_miles: positiveInteger(config.upcoming_miles) ?? DEFAULT_UPCOMING_MILES,
     extend_miles: positiveInteger(config.extend_miles)
       ?? positiveInteger(legacyExtendMiles)
       ?? DEFAULT_EXTEND_MILES,
   };
+  const accentColor = normalizeAccentColor(config.accent_color);
+  if (accentColor === null) delete normalized.accent_color;
+  else normalized.accent_color = accentColor;
+  return normalized;
 };
 
 const completionDetails = (value, odometer, interval, milestone = false) => {
@@ -82,11 +102,20 @@ const isDueSoonService = (entity, upcomingMiles) => {
     && remaining <= upcomingMiles;
 };
 
+const isNeverPerformed = (entity) => {
+  const attributes = entity?.attributes || {};
+  if (!attributes.initialized) return true;
+  return !attributes.milestone_completed
+    && finiteNumber(attributes.last_completed_mileage) === 0
+    && finiteNumber(attributes.due_mileage_override) === null;
+};
+
 const servicePresentation = (entity, odometer, upcomingMiles = DEFAULT_UPCOMING_MILES) => {
   const attributes = entity?.attributes || {};
   const remaining = finiteNumber(attributes.miles_remaining);
+  const neverPerformed = isNeverPerformed(entity);
   if (!attributes.initialized) {
-    return { kind: "not-logged", detail: "Not logged yet", badge: "LOG" };
+    return { kind: "never", detail: "Never performed", badge: "NEVER" };
   }
   if (attributes.status === "completed" || (attributes.milestone && attributes.milestone_completed)) {
     const completedAt = finiteNumber(attributes.milestone_completed_mileage);
@@ -107,13 +136,18 @@ const servicePresentation = (entity, odometer, upcomingMiles = DEFAULT_UPCOMING_
     };
   }
   if (remaining === null) {
-    return { kind: "unavailable", detail: "Due mileage unavailable", badge: "N/A" };
+    return {
+      kind: neverPerformed ? "never" : "unavailable",
+      detail: neverPerformed ? "Never performed" : "Due mileage unavailable",
+      badge: neverPerformed ? "NEVER" : "N/A",
+    };
   }
+  const prefix = neverPerformed ? "Never performed · " : "";
   if (remaining < 0) {
-    return { kind: "overdue", detail: `${formatNumber(Math.abs(remaining))} mi overdue`, badge: "OVERDUE" };
+    return { kind: "overdue", detail: `${prefix}${formatNumber(Math.abs(remaining))} mi overdue`, badge: "OVERDUE" };
   }
-  if (remaining === 0) return { kind: "due", detail: "Due now", badge: "DUE" };
-  return { kind: remaining <= upcomingMiles ? "due" : "okay", detail: `${formatNumber(remaining)} mi remaining`, badge: `${formatNumber(remaining)} mi` };
+  if (remaining === 0) return { kind: "due", detail: `${prefix}Due now`, badge: "DUE" };
+  return { kind: remaining <= upcomingMiles ? "due" : "okay", detail: `${prefix}${formatNumber(remaining)} mi remaining`, badge: `${formatNumber(remaining)} mi` };
 };
 
 class VehicleMaintCard extends HTMLElement {
@@ -241,9 +275,9 @@ class VehicleMaintCard extends HTMLElement {
 
   serviceRows(services) {
     if (!services.length) {
-      const notLogged = this.services().filter((entity) => !entity.attributes.initialized).length;
-      const note = this.view === "due" && notLogged
-        ? `<small>${notLogged} ${notLogged === 1 ? "service is" : "services are"} not logged yet. Open All Maintenance to begin tracking.</small>`
+      const neverPerformed = this.services().filter(isNeverPerformed).length;
+      const note = this.view === "due" && neverPerformed
+        ? `<small>${neverPerformed} ${neverPerformed === 1 ? "service has" : "services have"} never been performed. Open All Maintenance to review them.</small>`
         : "";
       return `<div class="empty"><b>No maintenance needs attention.</b><span>Nothing is due within ${formatNumber(this.config.upcoming_miles)} mi.</span>${note}</div>`;
     }
@@ -329,12 +363,13 @@ class VehicleMaintCard extends HTMLElement {
     const interval = positiveNumber(attributes.interval_miles);
     const due = finiteNumber(attributes.scheduled_due_mileage);
     const target = finiteNumber(attributes.snoozed_until_mileage);
+    const neverPerformed = isNeverPerformed(entity);
     return `<div class="backdrop"><section class="panel" role="dialog" aria-modal="true" aria-labelledby="maintenance-dialog-title" tabindex="-1">
       <header><div><small>Maintenance</small><h2 id="maintenance-dialog-title">${esc(attributes.service_name)}</h2></div><button class="close" aria-label="Close maintenance actions">×</button></header>
       <div class="facts">
         ${this.fact("Current odometer", odometer === null ? "Unavailable" : `${formatNumber(odometer)} mi`)}
         ${this.fact("Interval", interval === null ? "Unavailable" : `${formatNumber(interval)} mi`)}
-        ${this.fact("Next due", due === null ? "Not logged yet" : `${formatNumber(due)} mi`)}
+        ${this.fact("Next due", due === null ? (neverPerformed ? "Never performed" : "Unavailable") : `${formatNumber(due)} mi`)}
         ${target !== null && attributes.deferred ? this.fact("Extended until", `${formatNumber(target)} mi`) : ""}
       </div>
       ${this.error ? `<div class="error">${esc(this.error)}</div>` : ""}
@@ -357,7 +392,7 @@ class VehicleMaintCard extends HTMLElement {
     const all = this.services();
     const shown = this.visibleServices();
     const odometer = this.odometer();
-    const notLogged = all.filter((entity) => !entity.attributes.initialized).length;
+    const neverPerformed = all.filter(isNeverPerformed).length;
     const extended = all.filter((entity) => entity.attributes.deferred).length;
     const overdue = all.filter((entity) => !entity.attributes.deferred && finiteNumber(entity.attributes.miles_remaining) < 0).length;
     const dueSoon = all.filter((entity) => {
@@ -368,13 +403,37 @@ class VehicleMaintCard extends HTMLElement {
     const odometerText = odometer === null
       ? "Odometer unavailable"
       : `${formatNumber(odometer)} mi · ${source.charAt(0).toUpperCase()}${source.slice(1)}`;
+    const accentColor = this.config.accent_color || "var(--primary-color)";
+    this.style.setProperty("--vm-accent", accentColor);
+    this.style.setProperty("--vm-on-accent", accentTextColor(this.config.accent_color));
 
     this.innerHTML = `<style>
-      vehicle-maint-card{display:block}ha-card{overflow:hidden;border-radius:24px}button,input{font:inherit}.hero{display:flex;gap:14px;align-items:center;padding:21px;background:linear-gradient(135deg,color-mix(in srgb,var(--primary-color) 16%,var(--ha-card-background)),var(--ha-card-background) 70%)}.car{display:grid;place-items:center;width:52px;height:52px;border-radius:18px;color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 18%,transparent)}.title{flex:1;min-width:0}.title b,.title small{display:block}.title b{overflow:hidden;font-size:1.25rem;text-overflow:ellipsis;white-space:nowrap}.title small{color:var(--secondary-text-color);margin-top:3px}.chips{display:flex;gap:8px;padding:12px 18px;overflow-x:auto;border-bottom:1px solid var(--divider-color)}.chip{flex:0 0 auto;padding:6px 10px;border-radius:14px;background:var(--secondary-background-color);font-size:.82rem;font-weight:600}.chip.overdue{color:var(--error-color)}.chip.extended{color:var(--primary-color)}.views{display:flex;gap:8px;padding:12px 18px;border-bottom:1px solid var(--divider-color)}.views button{flex:1;min-height:42px;border:0;border-radius:12px;padding:9px;background:transparent;color:var(--secondary-text-color);font-weight:700}.views button.active,.action-tab.active{background:color-mix(in srgb,var(--primary-color) 16%,transparent);color:var(--primary-color)}.section-title{margin:0;padding:15px 18px 8px;font-size:1rem}.row{display:flex;border-top:1px solid var(--divider-color)}.row-main{display:flex;align-items:center;gap:12px;min-height:68px;flex:1;min-width:0;padding:9px 10px 9px 18px;border:0;background:transparent;color:var(--primary-text-color);text-align:left}.row-main:hover{background:color-mix(in srgb,var(--primary-color) 7%,transparent)}.service-icon{display:grid;place-items:center;width:40px;height:40px;flex:0 0 40px;border-radius:13px;background:var(--secondary-background-color);color:var(--primary-color)}.row-copy{display:flex;flex:1;min-width:0;flex-direction:column}.row-copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-copy small{color:var(--secondary-text-color);margin-top:3px}.row-value{flex:0 0 auto;max-width:95px;font-size:.76rem;font-weight:800;text-align:right}.overdue .row-value{color:var(--error-color)}.due .row-value{color:var(--warning-color,#ff9800)}.not-logged .row-value{color:#d89b00}.extended .row-value{color:var(--primary-color)}.completed .row-value,.okay .row-value{color:var(--success-color,#4caf50)}.info{width:46px;min-height:68px;border:0;background:transparent;color:var(--secondary-text-color)}.empty{display:flex;flex-direction:column;gap:6px;padding:28px 20px;text-align:center;color:var(--secondary-text-color)}.empty b{color:var(--primary-text-color)}.backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;justify-content:center;background:#0009}.panel{box-sizing:border-box;width:min(100%,620px);max-height:92vh;overflow:auto;padding:20px;padding-bottom:max(22px,env(safe-area-inset-bottom));border-radius:24px 24px 0 0;background:var(--card-background-color);color:var(--primary-text-color)}.panel header{display:flex;justify-content:space-between;align-items:flex-start}.panel header>div>small{color:var(--secondary-text-color)}.panel h2{margin:2px 0 14px}.close{width:44px;height:44px;border:0;background:transparent;color:var(--primary-text-color);font-size:2rem}.facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}.facts span{padding:10px;border-radius:12px;background:var(--secondary-background-color)}.facts small,.facts b{display:block}.facts small{color:var(--secondary-text-color);font-size:.76rem}.facts b{margin-top:3px}.action-tabs{display:flex;gap:7px;margin-top:14px;padding:4px;border-radius:14px;background:var(--secondary-background-color)}.action-tab{flex:1;min-height:44px;border:0;border-radius:11px;background:transparent;color:var(--secondary-text-color);font-weight:700}.workflow{padding-top:14px}.workflow h3{margin:0 0 10px;font-size:1rem}.workflow label{display:block;margin:12px 0 6px;color:var(--secondary-text-color);font-size:.85rem}.workflow input{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}.primary,.secondary,.text{width:100%;min-height:48px;margin-top:10px;border:0;border-radius:13px;font-weight:800}.primary{background:var(--primary-color);color:var(--text-primary-color)}.secondary{background:color-mix(in srgb,var(--primary-color) 16%,transparent);color:var(--primary-color)}.text{background:transparent;color:var(--primary-color)}button:disabled{cursor:not-allowed;opacity:.45}.workflow>small{display:block;margin-top:8px;color:var(--secondary-text-color)}.divider{display:flex;align-items:center;gap:10px;margin:18px 0 4px;color:var(--secondary-text-color);font-size:.78rem;text-transform:uppercase}.divider:before,.divider:after{content:"";height:1px;flex:1;background:var(--divider-color)}.inline-message{min-height:20px;margin-top:8px;color:var(--secondary-text-color);font-size:.84rem}.inline-message.invalid{color:var(--error-color)}.extension-choices{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.choice{min-height:44px;padding:6px;border:1px solid var(--divider-color);border-radius:11px;background:transparent;color:var(--primary-text-color);font-size:.82rem;font-weight:700}.choice.selected{border-color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 14%,transparent);color:var(--primary-color)}.notice{display:flex;flex-direction:column;gap:5px;padding:14px;border-radius:13px;background:var(--secondary-background-color)}.notice span{color:var(--secondary-text-color)}.error{padding:11px;border-radius:11px;background:color-mix(in srgb,var(--error-color) 18%,transparent);color:var(--error-color)}[hidden]{display:none!important}@media(max-width:430px){.hero{padding:18px}.panel{padding:17px}.extension-choices{grid-template-columns:1fr 1fr}.facts{grid-template-columns:1fr 1fr}.row-value{max-width:80px}.chips{padding-inline:14px}}
+      vehicle-maint-card{display:block}
+      ha-card{overflow:hidden;border-radius:24px}
+      button,input{font:inherit}
+      .hero{display:flex;gap:14px;align-items:center;padding:21px;background:linear-gradient(135deg,color-mix(in srgb,var(--vm-accent) 16%,var(--ha-card-background)),var(--ha-card-background) 70%)}
+      .car{display:grid;place-items:center;width:52px;height:52px;border-radius:18px;color:var(--vm-accent);background:color-mix(in srgb,var(--vm-accent) 18%,transparent)}
+      .title{flex:1;min-width:0}.title b,.title small{display:block}.title b{overflow:hidden;font-size:1.25rem;text-overflow:ellipsis;white-space:nowrap}.title small{color:var(--secondary-text-color);margin-top:3px}
+      .chips{display:flex;gap:8px;padding:12px 18px;overflow-x:auto;border-bottom:1px solid var(--divider-color)}.chip{flex:0 0 auto;padding:6px 10px;border-radius:14px;background:var(--secondary-background-color);font-size:.82rem;font-weight:600}.chip.overdue{color:var(--error-color)}.chip.extended{color:var(--vm-accent)}
+      .views{display:flex;gap:8px;padding:12px 18px;border-bottom:1px solid var(--divider-color)}.views button{flex:1;min-height:42px;border:0;border-radius:12px;padding:9px;background:transparent;color:var(--secondary-text-color);font-weight:700}.views button.active,.action-tab.active{background:color-mix(in srgb,var(--vm-accent) 16%,transparent);color:var(--vm-accent)}
+      .section-title{margin:0;padding:15px 18px 8px;font-size:1rem}.row{display:flex;border-top:1px solid var(--divider-color)}.row-main{display:flex;align-items:center;gap:12px;min-height:68px;flex:1;min-width:0;padding:9px 10px 9px 18px;border:0;background:transparent;color:var(--primary-text-color);text-align:left}.row-main:hover{background:color-mix(in srgb,var(--vm-accent) 7%,transparent)}
+      .service-icon{display:grid;place-items:center;width:40px;height:40px;flex:0 0 40px;border-radius:13px;background:var(--secondary-background-color);color:var(--vm-accent)}.row-copy{display:flex;flex:1;min-width:0;flex-direction:column}.row-copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-copy small{color:var(--secondary-text-color);margin-top:3px}.row-value{flex:0 0 auto;max-width:95px;font-size:.76rem;font-weight:800;text-align:right}
+      .overdue .row-value{color:var(--error-color)}.due .row-value{color:var(--warning-color,#ff9800)}.never .row-value,.extended .row-value{color:var(--vm-accent)}.completed .row-value,.okay .row-value{color:var(--success-color,#4caf50)}
+      .info{width:46px;min-height:68px;border:0;background:transparent;color:var(--secondary-text-color)}.empty{display:flex;flex-direction:column;gap:6px;padding:28px 20px;text-align:center;color:var(--secondary-text-color)}.empty b{color:var(--primary-text-color)}
+      .backdrop{position:fixed;inset:0;z-index:1000;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:16px;background:#0009}
+      .panel{box-sizing:border-box;width:min(100%,620px);max-height:92vh;max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;padding:20px;border-radius:24px;background:var(--card-background-color);color:var(--primary-text-color);box-shadow:0 18px 60px #0008}.panel header{display:flex;justify-content:space-between;align-items:flex-start}.panel header>div>small{color:var(--secondary-text-color)}.panel h2{margin:2px 0 14px}.close{width:44px;height:44px;border:0;background:transparent;color:var(--primary-text-color);font-size:2rem}
+      .facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}.facts span{padding:10px;border-radius:12px;background:var(--secondary-background-color)}.facts small,.facts b{display:block}.facts small{color:var(--secondary-text-color);font-size:.76rem}.facts b{margin-top:3px}
+      .action-tabs{display:flex;gap:7px;margin-top:14px;padding:4px;border-radius:14px;background:var(--secondary-background-color)}.action-tab{flex:1;min-height:44px;border:0;border-radius:11px;background:transparent;color:var(--secondary-text-color);font-weight:700}
+      .workflow{padding-top:14px}.workflow h3{margin:0 0 10px;font-size:1rem}.workflow label{display:block;margin:12px 0 6px;color:var(--secondary-text-color);font-size:.85rem}.workflow input{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}
+      .primary,.secondary,.text{width:100%;min-height:48px;margin-top:10px;border:0;border-radius:13px;font-weight:800}.primary{background:var(--vm-accent);color:var(--vm-on-accent)}.secondary{background:color-mix(in srgb,var(--vm-accent) 16%,transparent);color:var(--vm-accent)}.text{background:transparent;color:var(--vm-accent)}button:disabled{cursor:not-allowed;opacity:.45}.workflow>small{display:block;margin-top:8px;color:var(--secondary-text-color)}
+      .divider{display:flex;align-items:center;gap:10px;margin:18px 0 4px;color:var(--secondary-text-color);font-size:.78rem;text-transform:uppercase}.divider:before,.divider:after{content:"";height:1px;flex:1;background:var(--divider-color)}.inline-message{min-height:20px;margin-top:8px;color:var(--secondary-text-color);font-size:.84rem}.inline-message.invalid{color:var(--error-color)}
+      .extension-choices{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.choice{min-height:44px;padding:6px;border:1px solid var(--divider-color);border-radius:11px;background:transparent;color:var(--primary-text-color);font-size:.82rem;font-weight:700}.choice.selected{border-color:var(--vm-accent);background:color-mix(in srgb,var(--vm-accent) 14%,transparent);color:var(--vm-accent)}
+      .notice{display:flex;flex-direction:column;gap:5px;padding:14px;border-radius:13px;background:var(--secondary-background-color)}.notice span{color:var(--secondary-text-color)}.error{padding:11px;border-radius:11px;background:color-mix(in srgb,var(--error-color) 18%,transparent);color:var(--error-color)}[hidden]{display:none!important}
+      @media(max-width:430px){.hero{padding:18px}.panel{padding:17px}.extension-choices{grid-template-columns:1fr 1fr}.facts{grid-template-columns:1fr 1fr}.row-value{max-width:80px}.chips{padding-inline:14px}}
     </style>
     <ha-card>
       <div class="hero"><span class="car"><ha-icon icon="mdi:car"></ha-icon></span><span class="title"><b>${esc(main.attributes.vehicle_name || main.attributes.friendly_name)}</b><small>${esc(odometerText)}</small></span></div>
-      <div class="chips"><span class="chip overdue">${overdue} overdue</span><span class="chip">${dueSoon} due soon</span><span class="chip extended">${extended} extended</span><span class="chip">${notLogged} not logged</span></div>
+      <div class="chips"><span class="chip overdue">${overdue} overdue</span><span class="chip">${dueSoon} due soon</span><span class="chip extended">${extended} extended</span><span class="chip">${neverPerformed} never performed</span></div>
       <div class="views"><button data-view="due" class="${this.view === "due" ? "active" : ""}">Due Soon</button><button data-view="all" class="${this.view === "all" ? "active" : ""}">All Maintenance</button></div>
       <h3 class="section-title">${this.view === "due" ? "Needs Attention" : "All Maintenance"}</h3>
       ${this.serviceRows(shown)}
@@ -494,7 +553,10 @@ class VehicleMaintCardEditor extends HTMLElement {
   }
 
   changed(key, value) {
-    this.config = normalizeConfig({ ...this.config, [key]: value });
+    const next = { ...this.config };
+    if (value === null || value === undefined || value === "") delete next[key];
+    else next[key] = value;
+    this.config = normalizeConfig(next);
     this.dispatchEvent(new CustomEvent("config-changed", {
       bubbles: true,
       composed: true,
@@ -513,7 +575,10 @@ class VehicleMaintCardEditor extends HTMLElement {
       <input id="upcoming" class="upcoming" type="number" min="1" step="1" value="${this.config.upcoming_miles}">
       <label for="extend">Default extension in miles</label>
       <input id="extend" class="extend" type="number" min="1" step="1" value="${this.config.extend_miles}">
-    </div><style>label{display:block;margin:12px 0 5px}select,input{box-sizing:border-box;width:100%;min-height:44px;padding:0 10px}</style>`;
+      <label for="accent">Card accent color</label>
+      <div class="color-row"><input id="accent" class="accent" type="color" value="${this.config.accent_color || "#2196f3"}"><button type="button" class="reset-accent" ${this.config.accent_color ? "" : "disabled"}>Use Home Assistant theme</button></div>
+      <small>${this.config.accent_color ? `Using custom accent ${esc(this.config.accent_color)}.` : "Using the current Home Assistant theme color."}</small>
+    </div><style>label{display:block;margin:12px 0 5px}select,input{box-sizing:border-box;width:100%;min-height:44px;padding:0 10px}.color-row{display:grid;grid-template-columns:64px 1fr;gap:10px}.color-row input{padding:4px}.color-row button{min-height:44px;padding:0 12px;border:1px solid var(--divider-color);border-radius:8px;background:var(--secondary-background-color);color:var(--primary-text-color)}small{display:block;margin-top:5px;color:var(--secondary-text-color)}</style>`;
     this.querySelector(".vehicle").onchange = (event) => this.changed("main_entity", event.target.value);
     this.querySelector(".upcoming").onchange = (event) => {
       const value = positiveInteger(event.target.value);
@@ -523,6 +588,11 @@ class VehicleMaintCardEditor extends HTMLElement {
       const value = positiveInteger(event.target.value);
       if (value !== null) this.changed("extend_miles", value);
     };
+    this.querySelector(".accent").onchange = (event) => {
+      const value = normalizeAccentColor(event.target.value);
+      if (value !== null) this.changed("accent_color", value);
+    };
+    this.querySelector(".reset-accent").onclick = () => this.changed("accent_color", null);
   }
 }
 
@@ -540,11 +610,14 @@ console.info(`%c VEHICLE-MAINT-CARD %c v${CARD_VERSION} `, "color:white;backgrou
 if (typeof module !== "undefined") {
   module.exports = {
     VehicleMaintCard,
+    accentTextColor,
     completionDetails,
     extensionDetails,
     finiteNumber,
     isDueSoonService,
+    isNeverPerformed,
     normalizeConfig,
+    normalizeAccentColor,
     positiveNumber,
     servicePresentation,
   };

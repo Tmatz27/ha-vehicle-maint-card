@@ -2,3 +2,4 @@ type: custom:vehicle-maint-card
 main_entity: sensor.REPLACE_maintenance
 upcoming_miles: 2000
 extend_miles: 1000
+accent_color: "#43a047"
