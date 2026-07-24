@@ -375,14 +375,19 @@ The integration schedules these notifications internally for each vehicle. It do
 Available settings include:
 
 - Enable or disable notifications
-- Notification action
+- Notification target
 - Notification mileage threshold
 - Notification weekday
 - Notification time
 
-Example notification action:
+Select the phone or other notify entity that should receive the summary. For
+example:
 
-`notify.mobile_app_travis_phone`
+`notify.sm_s926u`
+
+The integration sends modern notify entities through Home Assistant's
+`notify.send_message` action. Existing configurations that use a legacy
+phone-specific action such as `notify.mobile_app_travis_phone` remain supported.
 
 Notifications include only maintenance that:
 

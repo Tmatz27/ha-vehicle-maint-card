@@ -14,20 +14,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import voluptuous as vol
 from homeassistant.helpers.storage import Store
 
+import custom_components.vehicle_maintenance as integration
 from custom_components.vehicle_maintenance import (
     BATCH_LOG_SCHEMA,
     _async_log_maintenance_batch,
+    _async_send_notification,
     async_migrate_entry,
 )
 from custom_components.vehicle_maintenance.config_flow import (
     SERVICE_GROUPS,
+    _notification_errors,
+    _notification_schema,
     _service_selector,
     _services_schema,
+    _vehicle_schema,
 )
 from custom_components.vehicle_maintenance.const import (
     ATTR_ENTRY_ID,
     CONF_INITIAL_INTERVALS,
     CONF_INTERVALS,
+    CONF_NOTIFY_ENABLED,
+    CONF_NOTIFY_SERVICE,
+    CONF_NOTIFY_THRESHOLD,
     CONF_SERVICES,
     DEFAULT_SERVICES,
 )
@@ -65,6 +73,82 @@ def test_service_schema_groups_every_default_exactly_once() -> None:
     assert set(defaults) == set(SERVICE_GROUPS)
     assert set(flattened) == set(DEFAULT_SERVICES)
     assert len(flattened) == len(DEFAULT_SERVICES)
+
+
+def test_vehicle_and_notification_pickers_filter_expected_entities() -> None:
+    vehicle_schema = _vehicle_schema({}, include_name=False)
+    odometer_selector = next(iter(vehicle_schema.schema.values()))
+    assert odometer_selector.config["domain"] == ["sensor"]
+    assert odometer_selector.config["device_class"] == ["distance"]
+
+    notification_schema = _notification_schema({})
+    notify_selector = next(
+        value
+        for key, value in notification_schema.schema.items()
+        if key.schema == CONF_NOTIFY_SERVICE
+    )
+    assert notify_selector.config["domain"] == ["notify"]
+
+
+def test_notification_validation_accepts_entity_and_legacy_action() -> None:
+    hass = MagicMock()
+    hass.states.get.return_value = SimpleNamespace(state="unknown")
+    hass.services.has_service.return_value = False
+
+    assert (
+        _notification_errors(
+            hass,
+            {
+                CONF_NOTIFY_ENABLED: True,
+                CONF_NOTIFY_SERVICE: "notify.sm_s926u",
+            },
+        )
+        == {}
+    )
+
+    hass.states.get.return_value = None
+    hass.services.has_service.return_value = True
+    assert (
+        _notification_errors(
+            hass,
+            {
+                CONF_NOTIFY_ENABLED: True,
+                CONF_NOTIFY_SERVICE: "notify.mobile_app_old_phone",
+            },
+        )
+        == {}
+    )
+
+
+def test_notification_entity_uses_send_message_target(monkeypatch) -> None:
+    hass = MagicMock()
+    hass.services.has_service.return_value = False
+    hass.services.async_call = AsyncMock()
+    manager = SimpleNamespace(
+        config={
+            CONF_NOTIFY_ENABLED: True,
+            CONF_NOTIFY_SERVICE: "notify.sm_s926u",
+            CONF_NOTIFY_THRESHOLD: 1500,
+            CONF_SERVICES: ["oil_change"],
+        },
+        effective_odometer=45000,
+        records={},
+        entry=SimpleNamespace(title="Outback", entry_id="vehicle-test"),
+    )
+    monkeypatch.setattr(integration, "notification_items", lambda *args: [(0, "Oil")])
+    monkeypatch.setattr(
+        integration, "format_notification_item", lambda item: "- Oil due"
+    )
+
+    asyncio.run(_async_send_notification(hass, manager))
+
+    hass.services.async_call.assert_awaited_once_with(
+        "notify",
+        "send_message",
+        {"title": "Outback maintenance", "message": "- Oil due"},
+        target={"entity_id": "notify.sm_s926u"},
+        blocking=False,
+    )
 
 
 def test_batch_log_schema_accepts_multiple_services_and_rejects_empty_list() -> None:

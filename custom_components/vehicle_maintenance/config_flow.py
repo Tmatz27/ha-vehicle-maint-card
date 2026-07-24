@@ -91,7 +91,7 @@ def _vehicle_schema(defaults: dict, *, include_name: bool) -> vol.Schema:
         else vol.Required(CONF_ODOMETER_ENTITY)
     )
     fields[odometer_marker] = selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="sensor")
+        selector.EntitySelectorConfig(domain="sensor", device_class="distance")
     )
     return vol.Schema(fields)
 
@@ -134,7 +134,9 @@ def _notification_schema(defaults: dict) -> vol.Schema:
             vol.Optional(
                 CONF_NOTIFY_SERVICE,
                 default=defaults.get(CONF_NOTIFY_SERVICE, ""),
-            ): selector.TextSelector(),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="notify")
+            ),
             vol.Optional(
                 CONF_NOTIFY_THRESHOLD,
                 default=defaults.get(
@@ -248,7 +250,9 @@ def _notification_errors(hass, user_input: dict) -> dict:
             errors[CONF_NOTIFY_SERVICE] = "invalid_notify_action"
         else:
             domain, service = target.split(".", 1)
-            if not hass.services.has_service(domain, service):
+            is_notify_entity = domain == "notify" and hass.states.get(target) is not None
+            is_legacy_action = hass.services.has_service(domain, service)
+            if not is_notify_entity and not is_legacy_action:
                 errors[CONF_NOTIFY_SERVICE] = "invalid_notify_action"
     return errors
 
