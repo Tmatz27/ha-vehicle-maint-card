@@ -6,7 +6,7 @@
         "description": "Name the vehicle and choose the mileage sensor that Home Assistant should trust.",
         "data": {
           "vehicle_name": "Vehicle display name",
-          "odometer_entity": "Authoritative odometer sensor"
+          "odometer_entity": "Vehicle odometer sensor"
         }
       },
       "services": {
@@ -55,7 +55,7 @@
         "description": "Optionally send one weekly summary for maintenance approaching on {vehicle}.",
         "data": {
           "notify_enabled": "Enable weekly summary",
-          "notify_service": "Notification action (for example notify.notify)",
+          "notify_service": "Notification target",
           "notify_threshold": "Notification threshold (miles)",
           "notify_weekday": "Notification day",
           "notify_time": "Notification time"
@@ -66,7 +66,7 @@
       "odometer_already_configured": "This odometer source is already assigned to another vehicle.",
       "odometer_not_miles": "The odometer must report miles. Create a miles conversion sensor first.",
       "odometer_not_numeric": "The selected odometer does not currently have a numeric state.",
-      "invalid_notify_action": "Enter an available notification action such as notify.notify.",
+      "invalid_notify_action": "Select an available notification target.",
       "select_at_least_one_service": "Select at least one maintenance item to track."
     }
   },
@@ -77,7 +77,7 @@
         "description": "Update the vehicle name or authoritative odometer source.",
         "data": {
           "vehicle_name": "Vehicle display name",
-          "odometer_entity": "Authoritative odometer sensor"
+          "odometer_entity": "Vehicle odometer sensor"
         }
       },
       "services": {
@@ -126,7 +126,7 @@
         "description": "Optionally send one weekly summary for maintenance approaching on {vehicle}.",
         "data": {
           "notify_enabled": "Enable weekly summary",
-          "notify_service": "Notification action",
+          "notify_service": "Notification target",
           "notify_threshold": "Notification threshold (miles)",
           "notify_weekday": "Notification day",
           "notify_time": "Notification time"
@@ -137,7 +137,7 @@
       "odometer_already_configured": "This odometer source is already assigned to another vehicle.",
       "odometer_not_miles": "The odometer must report miles. Create a miles conversion sensor first.",
       "odometer_not_numeric": "The selected odometer does not currently have a numeric state.",
-      "invalid_notify_action": "Enter an available notification action such as notify.notify.",
+      "invalid_notify_action": "Select an available notification target.",
       "select_at_least_one_service": "Select at least one maintenance item to track."
     }
   }

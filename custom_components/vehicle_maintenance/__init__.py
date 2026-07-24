@@ -47,7 +47,7 @@ from .model import (
 )
 
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.3"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.4"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 BATCH_LOG_SCHEMA = vol.Schema(
@@ -386,12 +386,23 @@ async def _async_send_notification(
     if not items:
         return
     domain, service = target.split(".", 1)
+    message = "\n".join(format_notification_item(item) for item in items)
+    title = f"{manager.entry.title} maintenance"
+    if domain == "notify" and not hass.services.has_service(domain, service):
+        await hass.services.async_call(
+            "notify",
+            "send_message",
+            {"title": title, "message": message},
+            target={"entity_id": target},
+            blocking=False,
+        )
+        return
     await hass.services.async_call(
         domain,
         service,
         {
-            "title": f"{manager.entry.title} maintenance",
-            "message": "\n".join(format_notification_item(item) for item in items),
+            "title": title,
+            "message": message,
             "data": {"tag": f"vehicle_maintenance_{manager.entry.entry_id}"},
         },
         blocking=False,

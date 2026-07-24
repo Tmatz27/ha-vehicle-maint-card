@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 - 2026-07-23
+
+- Replaced the notification action text field with a notify-entity picker.
+- Fixed weekly summaries for phone targets such as `notify.sm_s926u` by using Home Assistant's `notify.send_message` action.
+- Preserved delivery through previously configured legacy notification actions.
+- Renamed the odometer field and limited its picker to distance sensors.
+
 ## 0.1.3 - 2026-07-22
 
 - Split maintenance selection into four grouped, persistent checklists so multiple services can be added or removed in one pass.
