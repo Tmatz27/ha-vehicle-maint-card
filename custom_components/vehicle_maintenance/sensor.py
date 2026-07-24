@@ -200,6 +200,7 @@ class MaintenanceSensor(VehicleEntity):
             ATTR_ENTRY_ID: self.entry.entry_id,
             ATTR_SERVICE_KEY: self.service_key,
             "service_name": definition["name"],
+            "why_it_matters": definition["why"],
             "maintenance_type": definition.get("kind", "service"),
             "interval_miles": record.interval_miles,
             "initial_interval_miles": self.manager.config.get(

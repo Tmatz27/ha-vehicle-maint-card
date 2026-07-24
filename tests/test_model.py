@@ -1,8 +1,8 @@
 """Unit tests for maintenance arithmetic and migration."""
 
 import importlib.util
-from pathlib import Path
 import sys
+from pathlib import Path
 
 MODULE = Path(__file__).parents[1] / "custom_components/vehicle_maintenance/model.py"
 spec = importlib.util.spec_from_file_location("vehicle_maintenance_model", MODULE)
@@ -106,6 +106,23 @@ def test_completion_clears_snooze_and_override():
     model.complete_service(record, 44500)
     assert record.due_mileage_override is None
     assert record.snoozed_until_mileage is None
+
+
+def test_batch_completion_logs_one_odometer_and_each_service_semantics():
+    oil = ServiceRecord(True, 40000, 6000, snoozed_until_mileage=47000)
+    rotation = ServiceRecord(True, 40000, 6000)
+    milestone = ServiceRecord(True, interval_miles=60000)
+
+    model.complete_service_batch(
+        [(oil, False), (rotation, False), (milestone, True)], 44973
+    )
+
+    assert oil.last_completed_mileage == 44973
+    assert rotation.last_completed_mileage == 44973
+    assert oil.snoozed_until_mileage is None
+    assert model.scheduled_due_mileage(oil) == 50973
+    assert milestone.milestone_completed
+    assert milestone.milestone_completed_mileage == 44973
 
 
 def test_odometer_rejects_zero_and_decrease():

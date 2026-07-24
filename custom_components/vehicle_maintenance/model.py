@@ -126,6 +126,14 @@ def complete_service(
         record.last_completed_mileage = mileage
 
 
+def complete_service_batch(
+    records: list[tuple[ServiceRecord, bool]], mileage: int
+) -> None:
+    """Complete several prevalidated records at one factual odometer reading."""
+    for record, milestone in records:
+        complete_service(record, mileage, milestone=milestone)
+
+
 def initialize_service(
     record: ServiceRecord,
     mode: str,

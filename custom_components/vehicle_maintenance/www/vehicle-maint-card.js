@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.1.2";
+const CARD_VERSION = "0.1.3";
 const DOMAIN = "vehicle_maintenance";
 const DEFAULT_UPCOMING_MILES = 2000;
 const DEFAULT_EXTEND_MILES = 1000;
@@ -67,21 +67,27 @@ const normalizeConfig = (config = {}) => {
   return normalized;
 };
 
-const completionDetails = (value, odometer, interval, milestone = false) => {
-  const mileage = positiveNumber(value);
+const completionMileageDetails = (value, odometer) => {
+  const mileage = positiveInteger(value);
   const current = finiteNumber(odometer);
   if (mileage === null) {
-    return { valid: false, error: "Enter a positive completion mileage.", mileage: null, nextDue: null };
+    return { valid: false, error: "Enter a positive completion mileage.", mileage: null };
   }
   if (current !== null && mileage > current) {
-    return { valid: false, error: "Completion mileage cannot be greater than the current odometer.", mileage, nextDue: null };
+    return { valid: false, error: "Completion mileage cannot be greater than the current odometer.", mileage };
   }
-  if (milestone) return { valid: true, error: "", mileage, nextDue: null };
+  return { valid: true, error: "", mileage };
+};
+
+const completionDetails = (value, odometer, interval, milestone = false) => {
+  const completion = completionMileageDetails(value, odometer);
+  if (!completion.valid) return { ...completion, nextDue: null };
+  if (milestone) return { ...completion, nextDue: null };
   const serviceInterval = positiveNumber(interval);
   if (serviceInterval === null) {
-    return { valid: false, error: "A valid service interval is required.", mileage, nextDue: null };
+    return { ...completion, valid: false, error: "A valid service interval is required.", nextDue: null };
   }
-  return { valid: true, error: "", mileage, nextDue: mileage + serviceInterval };
+  return { ...completion, nextDue: completion.mileage + serviceInterval };
 };
 
 const extensionDetails = (odometer, amount) => {
@@ -165,6 +171,9 @@ class VehicleMaintCard extends HTMLElement {
     this.completionMileage = "";
     this.extensionChoice = String(DEFAULT_EXTEND_MILES);
     this.customExtension = "";
+    this.batchOpen = false;
+    this.batchServices = new Set();
+    this.batchMileage = "";
     this.serviceEntityIds = [];
     this.error = "";
   }
@@ -253,6 +262,9 @@ class VehicleMaintCard extends HTMLElement {
       await this._hass.callService(DOMAIN, service, { entry_id: this.entryId(), ...data });
       this.error = "";
       this.selectedService = null;
+      this.batchOpen = false;
+      this.batchServices.clear();
+      this.batchMileage = "";
       this.showToast(success);
       this.render();
     } catch (error) {
@@ -262,6 +274,7 @@ class VehicleMaintCard extends HTMLElement {
   }
 
   selectService(key) {
+    this.batchOpen = false;
     this.selectedService = key;
     this.actionMode = "log";
     this.completionMileage = "";
@@ -270,6 +283,21 @@ class VehicleMaintCard extends HTMLElement {
     this.customExtension = this.extensionChoice === "custom" ? configured : "";
     this.error = "";
     this.render();
+  }
+
+  openBatch() {
+    this.selectedService = null;
+    this.batchOpen = true;
+    this.batchServices = new Set();
+    this.batchMileage = "";
+    this.error = "";
+    this.render();
+  }
+
+  batchEligibleServices() {
+    return this.services().filter((entity) => !(
+      entity.attributes.milestone && entity.attributes.milestone_completed
+    ));
   }
 
   serviceRows(services) {
@@ -373,6 +401,7 @@ class VehicleMaintCard extends HTMLElement {
     }[attributes.maintenance_type] || "Maintenance";
     return `<div class="backdrop"><section class="panel" role="dialog" aria-modal="true" aria-labelledby="maintenance-dialog-title" tabindex="-1">
       <header><div><small>${esc(typeLabel)}</small><h2 id="maintenance-dialog-title">${esc(attributes.service_name)}</h2></div><button class="close" aria-label="Close maintenance actions">×</button></header>
+      <div class="why"><ha-icon icon="mdi:information-outline"></ha-icon><div><b>Why it matters</b><span>${esc(attributes.why_it_matters || "Keeping this item current supports safe, reliable vehicle operation.")}</span></div></div>
       <div class="facts">
         ${this.fact("Current odometer", odometer === null ? "Unavailable" : `${formatNumber(odometer)} mi`)}
         ${this.fact(initialInterval === null ? "Interval" : "Repeat interval", interval === null ? "Unavailable" : `${formatNumber(interval)} mi`)}
@@ -386,6 +415,63 @@ class VehicleMaintCard extends HTMLElement {
         <button class="action-tab ${this.actionMode === "extend" ? "active" : ""}" data-action-mode="extend" role="tab" aria-selected="${this.actionMode === "extend"}">Extend Maintenance</button>
       </div>
       ${this.actionMode === "log" ? this.logPanel(attributes, odometer) : this.extendPanel(attributes, odometer)}
+    </section></div>`;
+  }
+
+  batchPanel() {
+    if (!this.batchOpen) return "";
+    const odometer = this.odometer();
+    const services = this.batchEligibleServices();
+    const selectedCount = this.batchServices.size;
+    const mileageDetails = completionMileageDetails(this.batchMileage, odometer);
+    const groups = [
+      ["Scheduled Service and Replacements", new Set(["perform", "replace"])],
+      ["Inspections", new Set(["inspect"])],
+      ["Condition-Based Reminders", new Set(["condition"])],
+      ["Mileage Milestones", new Set(["milestone"])],
+    ];
+    const groupedRows = groups.map(([label, kinds]) => {
+      const matches = services.filter((entity) => kinds.has(entity.attributes.maintenance_type));
+      if (!matches.length) return "";
+      const rows = matches.map((entity) => {
+        const attributes = entity.attributes;
+        const display = servicePresentation(entity, odometer, this.config.upcoming_miles);
+        const checked = this.batchServices.has(attributes.service_key) ? "checked" : "";
+        return `<label class="batch-item ${esc(display.kind)}">
+          <input type="checkbox" data-batch-service="${esc(attributes.service_key)}" ${checked}>
+          <span class="service-icon"><ha-icon icon="${esc(attributes.icon || entity.attributes.icon || "mdi:wrench-outline")}"></ha-icon></span>
+          <span class="row-copy"><b>${esc(attributes.service_name)}</b><small>${esc(display.detail)}</small></span>
+        </label>`;
+      }).join("");
+      return `<section class="batch-group"><h3>${esc(label)}</h3>${rows}</section>`;
+    }).join("");
+    const currentText = selectedCount
+      ? `Log ${selectedCount} ${selectedCount === 1 ? "item" : "items"} at ${formatNumber(odometer)} mi`
+      : "Select maintenance first";
+    const exactText = selectedCount && mileageDetails.valid
+      ? `Log ${selectedCount} ${selectedCount === 1 ? "item" : "items"} at ${formatNumber(mileageDetails.mileage)} mi`
+      : "Select maintenance and enter mileage";
+    const preview = this.batchMileage === ""
+      ? "Enter the mileage from when this visit was completed."
+      : mileageDetails.valid
+        ? `The same ${formatNumber(mileageDetails.mileage)} mi reading will be applied to every selected item.`
+        : mileageDetails.error;
+    return `<div class="backdrop batch-backdrop"><section class="panel batch-panel" role="dialog" aria-modal="true" aria-labelledby="batch-dialog-title" tabindex="-1">
+      <header><div><small>Batch maintenance</small><h2 id="batch-dialog-title">Log a Service Visit</h2></div><button class="close batch-close" aria-label="Close service visit">×</button></header>
+      <p class="batch-intro">Select everything completed during the same visit. One odometer reading will be applied to all selected items.</p>
+      ${this.error ? `<div class="error">${esc(this.error)}</div>` : ""}
+      <div class="batch-tools"><button class="text-button select-due" type="button">Select Due Items</button><button class="text-button clear-batch" type="button" ${selectedCount ? "" : "disabled"}>Clear</button><b class="batch-count">${selectedCount} selected</b></div>
+      <div class="batch-list">${groupedRows}</div>
+      <div class="batch-log-actions">
+        <h3>Use the current odometer</h3>
+        <button class="primary batch-log-current" ${odometer === null || !selectedCount ? "disabled" : ""}>${odometer === null ? "Odometer unavailable" : esc(currentText)}</button>
+        <div class="divider"><span>or completed earlier</span></div>
+        <label for="batch-mileage">Mileage when completed</label>
+        <input id="batch-mileage" class="batch-mileage" type="number" inputmode="numeric" min="1" step="1" placeholder="Enter exact mileage" value="${esc(this.batchMileage)}">
+        <div class="inline-message batch-mileage-result ${this.batchMileage !== "" && !mileageDetails.valid ? "invalid" : ""}">${esc(preview)}</div>
+        <button class="secondary batch-log-exact" ${selectedCount && mileageDetails.valid ? "" : "disabled"}>${esc(exactText)}</button>
+        <small>Each recurring item keeps its own interval. Any active extension on a logged item is cleared.</small>
+      </div>
     </section></div>`;
   }
 
@@ -424,28 +510,32 @@ class VehicleMaintCard extends HTMLElement {
       .title{flex:1;min-width:0}.title b,.title small{display:block}.title b{overflow:hidden;font-size:1.25rem;text-overflow:ellipsis;white-space:nowrap}.title small{color:var(--secondary-text-color);margin-top:3px}
       .chips{display:flex;gap:8px;padding:12px 18px;overflow-x:auto;border-bottom:1px solid var(--divider-color)}.chip{flex:0 0 auto;padding:6px 10px;border-radius:14px;background:var(--secondary-background-color);font-size:.82rem;font-weight:600}.chip.overdue{color:var(--error-color)}.chip.extended{color:var(--vm-accent)}
       .views{display:flex;gap:8px;padding:12px 18px;border-bottom:1px solid var(--divider-color)}.views button{flex:1;min-height:42px;border:0;border-radius:12px;padding:9px;background:transparent;color:var(--secondary-text-color);font-weight:700}.views button.active,.action-tab.active{background:color-mix(in srgb,var(--vm-accent) 16%,transparent);color:var(--vm-accent)}
+      .card-actions{padding:12px 18px 0}.batch-open{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;border:1px solid color-mix(in srgb,var(--vm-accent) 45%,var(--divider-color));border-radius:13px;background:color-mix(in srgb,var(--vm-accent) 10%,transparent);color:var(--vm-accent);font-weight:800}
       .section-title{margin:0;padding:15px 18px 8px;font-size:1rem}.row{display:flex;border-top:1px solid var(--divider-color)}.row-main{display:flex;align-items:center;gap:12px;min-height:68px;flex:1;min-width:0;padding:9px 10px 9px 18px;border:0;background:transparent;color:var(--primary-text-color);text-align:left}.row-main:hover{background:color-mix(in srgb,var(--vm-accent) 7%,transparent)}
       .service-icon{display:grid;place-items:center;width:40px;height:40px;flex:0 0 40px;border-radius:13px;background:var(--secondary-background-color);color:var(--vm-accent)}.row-copy{display:flex;flex:1;min-width:0;flex-direction:column}.row-copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-copy small{color:var(--secondary-text-color);margin-top:3px}.row-value{flex:0 0 auto;max-width:95px;font-size:.76rem;font-weight:800;text-align:right}
       .overdue .row-value{color:var(--error-color)}.due .row-value{color:var(--warning-color,#ff9800)}.never .row-value,.extended .row-value{color:var(--vm-accent)}.completed .row-value,.okay .row-value{color:var(--success-color,#4caf50)}
       .info{width:46px;min-height:68px;border:0;background:transparent;color:var(--secondary-text-color)}.empty{display:flex;flex-direction:column;gap:6px;padding:28px 20px;text-align:center;color:var(--secondary-text-color)}.empty b{color:var(--primary-text-color)}
       .backdrop{position:fixed;inset:0;z-index:1000;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:16px;background:#0009}
       .panel{box-sizing:border-box;width:min(100%,620px);max-height:92vh;max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;padding:20px;border-radius:24px;background:var(--card-background-color);color:var(--primary-text-color);box-shadow:0 18px 60px #0008}.panel header{display:flex;justify-content:space-between;align-items:flex-start}.panel header>div>small{color:var(--secondary-text-color)}.panel h2{margin:2px 0 14px}.close{width:44px;height:44px;border:0;background:transparent;color:var(--primary-text-color);font-size:2rem}
+      .why{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;padding:12px 13px;border-left:4px solid var(--vm-accent);border-radius:10px;background:color-mix(in srgb,var(--vm-accent) 10%,var(--secondary-background-color))}.why>ha-icon{flex:0 0 auto;margin-top:1px;color:var(--vm-accent)}.why div{display:flex;min-width:0;flex-direction:column;gap:3px}.why b{font-size:.84rem}.why span{color:var(--secondary-text-color);font-size:.86rem;line-height:1.35}
       .facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}.facts span{padding:10px;border-radius:12px;background:var(--secondary-background-color)}.facts small,.facts b{display:block}.facts small{color:var(--secondary-text-color);font-size:.76rem}.facts b{margin-top:3px}
       .action-tabs{display:flex;gap:7px;margin-top:14px;padding:4px;border-radius:14px;background:var(--secondary-background-color)}.action-tab{flex:1;min-height:44px;border:0;border-radius:11px;background:transparent;color:var(--secondary-text-color);font-weight:700}
       .workflow{padding-top:14px}.workflow h3{margin:0 0 10px;font-size:1rem}.workflow label{display:block;margin:12px 0 6px;color:var(--secondary-text-color);font-size:.85rem}.workflow input{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}
       .primary,.secondary,.text{width:100%;min-height:48px;margin-top:10px;border:0;border-radius:13px;font-weight:800}.primary{background:var(--vm-accent);color:var(--vm-on-accent)}.secondary{background:color-mix(in srgb,var(--vm-accent) 16%,transparent);color:var(--vm-accent)}.text{background:transparent;color:var(--vm-accent)}button:disabled{cursor:not-allowed;opacity:.45}.workflow>small{display:block;margin-top:8px;color:var(--secondary-text-color)}
       .divider{display:flex;align-items:center;gap:10px;margin:18px 0 4px;color:var(--secondary-text-color);font-size:.78rem;text-transform:uppercase}.divider:before,.divider:after{content:"";height:1px;flex:1;background:var(--divider-color)}.inline-message{min-height:20px;margin-top:8px;color:var(--secondary-text-color);font-size:.84rem}.inline-message.invalid{color:var(--error-color)}
       .extension-choices{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.choice{min-height:44px;padding:6px;border:1px solid var(--divider-color);border-radius:11px;background:transparent;color:var(--primary-text-color);font-size:.82rem;font-weight:700}.choice.selected{border-color:var(--vm-accent);background:color-mix(in srgb,var(--vm-accent) 14%,transparent);color:var(--vm-accent)}
+      .batch-intro{margin:0 0 12px;color:var(--secondary-text-color)}.batch-tools{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:8px;margin:12px 0}.text-button{min-height:38px;padding:6px 10px;border:0;border-radius:10px;background:color-mix(in srgb,var(--vm-accent) 12%,transparent);color:var(--vm-accent);font-weight:700}.batch-count{text-align:right;font-size:.84rem}.batch-list{max-height:38vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--divider-color);border-radius:14px}.batch-group h3{position:sticky;top:0;z-index:1;margin:0;padding:9px 12px;background:var(--secondary-background-color);font-size:.78rem;text-transform:uppercase;color:var(--secondary-text-color)}.batch-item{display:flex;align-items:center;gap:10px;min-height:58px;padding:7px 11px;border-top:1px solid var(--divider-color)}.batch-item input{width:22px;height:22px;flex:0 0 22px;accent-color:var(--vm-accent)}.batch-item .service-icon{width:36px;height:36px;flex-basis:36px}.batch-log-actions{padding-top:15px}.batch-log-actions h3{margin:0 0 8px;font-size:1rem}.batch-log-actions>label{display:block;margin:12px 0 6px;color:var(--secondary-text-color);font-size:.85rem}.batch-log-actions>input{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}.batch-log-actions>small{display:block;margin-top:8px;color:var(--secondary-text-color)}
       .notice{display:flex;flex-direction:column;gap:5px;padding:14px;border-radius:13px;background:var(--secondary-background-color)}.notice span{color:var(--secondary-text-color)}.error{padding:11px;border-radius:11px;background:color-mix(in srgb,var(--error-color) 18%,transparent);color:var(--error-color)}[hidden]{display:none!important}
-      @media(max-width:430px){.hero{padding:18px}.panel{padding:17px}.extension-choices{grid-template-columns:1fr 1fr}.facts{grid-template-columns:1fr 1fr}.row-value{max-width:80px}.chips{padding-inline:14px}}
+      @media(max-width:430px){.hero{padding:18px}.panel{padding:17px}.extension-choices{grid-template-columns:1fr 1fr}.facts{grid-template-columns:1fr 1fr}.row-value{max-width:80px}.chips{padding-inline:14px}.batch-tools{grid-template-columns:1fr 1fr}.batch-count{grid-column:1/-1;text-align:left}}
     </style>
     <ha-card>
       <div class="hero"><span class="car"><ha-icon icon="mdi:car"></ha-icon></span><span class="title"><b>${esc(main.attributes.vehicle_name || main.attributes.friendly_name)}</b><small>${esc(odometerText)}</small></span></div>
       <div class="chips"><span class="chip overdue">${overdue} overdue</span><span class="chip">${dueSoon} due soon</span><span class="chip extended">${extended} extended</span><span class="chip">${neverPerformed} never performed</span></div>
       <div class="views"><button data-view="due" class="${this.view === "due" ? "active" : ""}">Due Soon</button><button data-view="all" class="${this.view === "all" ? "active" : ""}">All Maintenance</button></div>
+      <div class="card-actions"><button class="batch-open" type="button"><ha-icon icon="mdi:clipboard-check-outline"></ha-icon>Log a Service Visit</button></div>
       <h3 class="section-title">${this.view === "due" ? "Needs Attention" : "All Maintenance"}</h3>
       ${this.serviceRows(shown)}
-    </ha-card>${this.actionPanel()}`;
+    </ha-card>${this.actionPanel()}${this.batchPanel()}`;
 
     this.querySelectorAll("[data-view]").forEach((button) => {
       button.onclick = () => { this.view = button.dataset.view; this.render(); };
@@ -456,7 +546,9 @@ class VehicleMaintCard extends HTMLElement {
     this.querySelectorAll("[data-info]").forEach((button) => {
       button.onclick = () => this.moreInfo(button.dataset.info);
     });
+    this.querySelector(".batch-open")?.addEventListener("click", () => this.openBatch());
     this.bindPanel();
+    this.bindBatchPanel();
   }
 
   bindPanel() {
@@ -547,6 +639,98 @@ class VehicleMaintCard extends HTMLElement {
       this.call("clear_snooze", { service: this.selectedService }, `Extension cleared for ${attributes.service_name}`);
     });
   }
+
+  bindBatchPanel() {
+    if (!this.batchOpen) return;
+    const services = this.batchEligibleServices();
+    const odometer = this.odometer();
+    const panel = this.querySelector(".batch-panel");
+    const checkboxes = [...this.querySelectorAll("[data-batch-service]")];
+    const count = this.querySelector(".batch-count");
+    const clearButton = this.querySelector(".clear-batch");
+    const currentButton = this.querySelector(".batch-log-current");
+    const exactButton = this.querySelector(".batch-log-exact");
+    const mileageInput = this.querySelector(".batch-mileage");
+    const mileageResult = this.querySelector(".batch-mileage-result");
+    const close = () => {
+      this.batchOpen = false;
+      this.batchServices.clear();
+      this.batchMileage = "";
+      this.error = "";
+      this.render();
+    };
+    const refresh = () => {
+      const selectedCount = this.batchServices.size;
+      const details = completionMileageDetails(this.batchMileage, odometer);
+      count.textContent = `${selectedCount} selected`;
+      clearButton.disabled = !selectedCount;
+      currentButton.disabled = odometer === null || !selectedCount;
+      currentButton.textContent = odometer === null
+        ? "Odometer unavailable"
+        : selectedCount
+          ? `Log ${selectedCount} ${selectedCount === 1 ? "item" : "items"} at ${formatNumber(odometer)} mi`
+          : "Select maintenance first";
+      exactButton.disabled = !selectedCount || !details.valid;
+      exactButton.textContent = selectedCount && details.valid
+        ? `Log ${selectedCount} ${selectedCount === 1 ? "item" : "items"} at ${formatNumber(details.mileage)} mi`
+        : "Select maintenance and enter mileage";
+      mileageResult.classList.toggle("invalid", this.batchMileage !== "" && !details.valid);
+      mileageResult.textContent = this.batchMileage === ""
+        ? "Enter the mileage from when this visit was completed."
+        : details.valid
+          ? `The same ${formatNumber(details.mileage)} mi reading will be applied to every selected item.`
+          : details.error;
+    };
+    const selectKeys = (keys) => {
+      this.batchServices = new Set(keys);
+      checkboxes.forEach((checkbox) => {
+        checkbox.checked = this.batchServices.has(checkbox.dataset.batchService);
+      });
+      refresh();
+    };
+
+    this.querySelector(".batch-close").onclick = close;
+    this.querySelector(".batch-backdrop").onclick = (event) => {
+      if (event.target === event.currentTarget) close();
+    };
+    panel.onkeydown = (event) => { if (event.key === "Escape") close(); };
+    checkboxes.forEach((checkbox) => {
+      checkbox.onchange = () => {
+        if (checkbox.checked) this.batchServices.add(checkbox.dataset.batchService);
+        else this.batchServices.delete(checkbox.dataset.batchService);
+        refresh();
+      };
+    });
+    this.querySelector(".select-due").onclick = () => selectKeys(
+      services
+        .filter((entity) => isDueSoonService(entity, this.config.upcoming_miles))
+        .map((entity) => entity.attributes.service_key),
+    );
+    clearButton.onclick = () => selectKeys([]);
+    mileageInput.oninput = () => {
+      this.batchMileage = mileageInput.value;
+      refresh();
+    };
+    currentButton.onclick = () => {
+      if (odometer === null || !this.batchServices.size) return;
+      const selected = [...this.batchServices];
+      this.call(
+        "log_maintenance_batch",
+        { services: selected },
+        `${selected.length} maintenance ${selected.length === 1 ? "item" : "items"} logged at ${formatNumber(odometer)} mi`,
+      );
+    };
+    exactButton.onclick = () => {
+      const details = completionMileageDetails(this.batchMileage, odometer);
+      if (!details.valid || !this.batchServices.size) { refresh(); return; }
+      const selected = [...this.batchServices];
+      this.call(
+        "log_maintenance_batch",
+        { services: selected, mileage: details.mileage },
+        `${selected.length} maintenance ${selected.length === 1 ? "item" : "items"} logged at ${formatNumber(details.mileage)} mi`,
+      );
+    };
+  }
 }
 
 class VehicleMaintCardEditor extends HTMLElement {
@@ -620,6 +804,7 @@ if (typeof module !== "undefined") {
     VehicleMaintCard,
     accentTextColor,
     completionDetails,
+    completionMileageDetails,
     extensionDetails,
     finiteNumber,
     isDueSoonService,

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import time
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfLength
 from homeassistant.helpers import selector
@@ -29,6 +28,13 @@ from .const import (
     SERVICE_CATALOG,
 )
 
+SERVICE_GROUPS = {
+    "scheduled_services": {"perform", "replace"},
+    "inspection_services": {"inspect"},
+    "condition_services": {"condition"},
+    "milestone_services": {"milestone"},
+}
+
 
 def _service_label(definition: dict) -> str:
     name = definition["name"]
@@ -47,10 +53,12 @@ def _service_label(definition: dict) -> str:
     return f"{name} ({action} every {interval:,} mi)"
 
 
-def _service_selector() -> selector.SelectSelector:
+def _service_selector(service_keys=None) -> selector.SelectSelector:
+    allowed = set(SERVICE_CATALOG if service_keys is None else service_keys)
     options = [
         selector.SelectOptionDict(value=key, label=_service_label(value))
         for key, value in SERVICE_CATALOG.items()
+        if key in allowed
     ]
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
@@ -59,6 +67,16 @@ def _service_selector() -> selector.SelectSelector:
             mode=selector.SelectSelectorMode.LIST,
         )
     )
+
+
+def _selected_services(values: dict) -> list[str]:
+    if CONF_SERVICES in values:
+        selected = set(values.get(CONF_SERVICES, []))
+    else:
+        selected = {
+            service for field in SERVICE_GROUPS for service in values.get(field, [])
+        }
+    return [key for key in SERVICE_CATALOG if key in selected]
 
 
 def _vehicle_schema(defaults: dict, *, include_name: bool) -> vol.Schema:
@@ -79,14 +97,22 @@ def _vehicle_schema(defaults: dict, *, include_name: bool) -> vol.Schema:
 
 
 def _services_schema(defaults: dict) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_SERVICES,
-                default=defaults.get(CONF_SERVICES, DEFAULT_SERVICES),
-            ): _service_selector()
-        }
+    selected = set(
+        _selected_services(defaults)
+        if CONF_SERVICES in defaults or any(key in defaults for key in SERVICE_GROUPS)
+        else DEFAULT_SERVICES
     )
+    fields = {}
+    for field, kinds in SERVICE_GROUPS.items():
+        keys = [
+            key
+            for key, definition in SERVICE_CATALOG.items()
+            if definition.get("kind") in kinds
+        ]
+        fields[
+            vol.Required(field, default=[key for key in keys if key in selected])
+        ] = _service_selector(keys)
+    return vol.Schema(fields)
 
 
 def _notification_schema(defaults: dict) -> vol.Schema:
@@ -253,7 +279,7 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_services(self, user_input=None):
         if user_input is not None:
-            selected = list(user_input.get(CONF_SERVICES, []))
+            selected = _selected_services(user_input)
             if not selected:
                 return self.async_show_form(
                     step_id="services",
@@ -347,7 +373,7 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_services(self, user_input=None):
         if user_input is not None:
-            selected = list(user_input.get(CONF_SERVICES, []))
+            selected = _selected_services(user_input)
             if not selected:
                 return self.async_show_form(
                     step_id="services",
