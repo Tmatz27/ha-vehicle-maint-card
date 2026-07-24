@@ -55,7 +55,7 @@
         "description": "Optionally send one weekly summary for maintenance approaching on {vehicle}.",
         "data": {
           "notify_enabled": "Enable weekly summary",
-          "notify_service": "Notification target"
+          "notify_service": "Notification target",
           "notify_threshold": "Notification threshold (miles)",
           "notify_weekday": "Notification day",
           "notify_time": "Notification time"
