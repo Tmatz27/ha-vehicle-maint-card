@@ -3,7 +3,6 @@
 import ast
 from pathlib import Path
 
-
 SOURCE = Path("custom_components/vehicle_maintenance/manager.py").read_text()
 TREE = ast.parse(SOURCE)
 

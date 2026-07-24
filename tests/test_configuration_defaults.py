@@ -2,9 +2,10 @@
 
 import importlib.util
 import json
-from pathlib import Path
 import struct
+from pathlib import Path
 
+import yaml
 
 ROOT = Path(__file__).parents[1]
 CONST = ROOT / "custom_components/vehicle_maintenance/const.py"
@@ -15,6 +16,13 @@ spec.loader.exec_module(const)
 
 def test_new_vehicles_select_the_complete_catalog() -> None:
     assert const.DEFAULT_SERVICES == list(const.SERVICE_CATALOG)
+
+
+def test_every_service_has_a_short_why_it_matters_bluf() -> None:
+    for definition in const.SERVICE_CATALOG.values():
+        bluf = definition.get("why")
+        assert isinstance(bluf, str) and bluf.strip()
+        assert len(bluf) <= 150
 
 
 def test_modern_subaru_defaults_and_supported_icons() -> None:
@@ -37,6 +45,41 @@ def test_service_selection_uses_a_persistent_multi_select_list() -> None:
     assert "mode=selector.SelectSelectorMode.LIST" in source
     assert "mode=selector.SelectSelectorMode.DROPDOWN" not in source
     assert "async_step_services" in source
+    for group in (
+        "scheduled_services",
+        "inspection_services",
+        "condition_services",
+        "milestone_services",
+    ):
+        assert group in source
+
+
+def test_batch_log_action_is_declared_for_home_assistant_and_the_card() -> None:
+    component = ROOT / "custom_components/vehicle_maintenance"
+    integration_source = (component / "__init__.py").read_text()
+    service_actions = (component / "services.yaml").read_text()
+    card_source = (component / "www/vehicle-maint-card.js").read_text()
+
+    assert "log_maintenance_batch" in integration_source
+    assert "log_maintenance_batch:" in service_actions
+    assert '"log_maintenance_batch"' in card_source
+
+    actions = yaml.safe_load(service_actions)
+    options = actions["log_maintenance_batch"]["fields"]["services"]["selector"][
+        "select"
+    ]["options"]
+    assert all(set(option) == {"label", "value"} for option in options)
+    assert {option["value"] for option in options} == set(const.SERVICE_CATALOG)
+
+
+def test_card_displays_the_why_it_matters_sensor_attribute() -> None:
+    component = ROOT / "custom_components/vehicle_maintenance"
+    sensor_source = (component / "sensor.py").read_text()
+    card_source = (component / "www/vehicle-maint-card.js").read_text()
+
+    assert '"why_it_matters": definition["why"]' in sensor_source
+    assert "Why it matters" in card_source
+    assert "attributes.why_it_matters" in card_source
 
 
 def test_local_brand_icons_are_valid_png_sizes() -> None:

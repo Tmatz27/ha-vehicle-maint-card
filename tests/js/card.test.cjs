@@ -14,6 +14,7 @@ const {
   VehicleMaintCard,
   accentTextColor,
   completionDetails,
+  completionMileageDetails,
   extensionDetails,
   finiteNumber,
   isDueSoonService,
@@ -68,6 +69,17 @@ test("completion validation rejects blank, zero, and future mileage", () => {
   assert.equal(completionDetails("0", 44973, 6000).valid, false);
   assert.match(completionDetails("45000", 44973, 6000).error, /greater than/);
   assert.equal(completionDetails("43500", null, 6000).valid, true);
+});
+
+test("batch completion accepts one factual mileage without requiring one interval", () => {
+  assert.deepEqual(completionMileageDetails("43500", 44973), {
+    valid: true,
+    error: "",
+    mileage: 43500,
+  });
+  assert.equal(completionMileageDetails("45000", 44973).valid, false);
+  assert.equal(completionMileageDetails("", 44973).valid, false);
+  assert.equal(completionMileageDetails("43500.5", 44973).valid, false);
 });
 
 test("extension target is always current odometer plus extension", () => {
@@ -149,12 +161,52 @@ test("normal card source does not expose internal record editing", () => {
   assert.equal(source.includes("Extend Maintenance"), true);
 });
 
+test("card offers one batch service-visit workflow", () => {
+  assert.equal(source.includes("Log a Service Visit"), true);
+  assert.equal(source.includes("Select Due Items"), true);
+  assert.equal(source.includes('"log_maintenance_batch"'), true);
+  assert.equal(source.includes("data-batch-service"), true);
+});
+
+test("batch logging excludes an already completed one-time milestone", () => {
+  const card = new VehicleMaintCard();
+  card.config = { main_entity: "sensor.vehicle", upcoming_miles: 2000 };
+  card._hass = {
+    states: {
+      "sensor.vehicle": { attributes: { entry_id: "entry-1" } },
+      "sensor.oil": {
+        entity_id: "sensor.oil",
+        attributes: { entry_id: "entry-1", service_key: "oil_change", milestone: false },
+      },
+      "sensor.60k": {
+        entity_id: "sensor.60k",
+        attributes: {
+          entry_id: "entry-1",
+          service_key: "service_60k",
+          milestone: true,
+          milestone_completed: true,
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    card.batchEligibleServices().map((entity) => entity.attributes.service_key),
+    ["oil_change"],
+  );
+});
+
 test("maintenance dialog is centered and the editor exposes accent color", () => {
   assert.equal(source.includes("align-items:center"), true);
   assert.equal(source.includes("align-items:flex-end"), false);
   assert.equal(source.includes("--vm-accent"), true);
   assert.equal(source.includes("Card accent color"), true);
   assert.equal(source.includes("Use Home Assistant theme"), true);
+});
+
+test("maintenance dialog includes a concise why it matters BLUF", () => {
+  assert.equal(source.includes("Why it matters"), true);
+  assert.equal(source.includes("attributes.why_it_matters"), true);
 });
 
 test("unrelated state changes do not trigger a card rebuild", () => {

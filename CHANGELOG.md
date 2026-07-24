@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.1.2 - next release candidate
+## 0.1.3 - 2026-07-22
+
+- Split maintenance selection into four grouped, persistent checklists so multiple services can be added or removed in one pass.
+- Added a card workflow for logging several maintenance items from one service visit at the same odometer reading.
+- Added an atomic batch logging action that validates every selected item and saves the vehicle once.
+- Added a short Why it matters explanation to every maintenance action popup.
+
+## 0.1.2 - 2026-07-22
 
 - Added local integration artwork for Home Assistant 2026.3 and newer.
 - Replaced unsupported Spark Plugs and Wheel Alignment icons with reliable Material Design icons.

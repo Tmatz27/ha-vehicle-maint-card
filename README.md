@@ -11,12 +11,13 @@ Each vehicle is configured through the Home Assistant interface and receives its
 - Remembers the last valid odometer reading when the source is temporarily unavailable
 - Creates standardized maintenance entities for each vehicle
 - Selects the complete built-in service and milestone catalog for new vehicles
-- Uses a persistent checklist so multiple services can be added or removed in one pass
+- Uses four grouped, persistent checklists so multiple services can be added or removed in one pass
 - Starts every selected item as Never performed instead of Not set
 - Allows different service intervals for each vehicle
 - Includes modern Subaru normal-use starting intervals with inspection and condition reminders clearly identified
 - Shows overdue and upcoming maintenance
 - Logs maintenance using the current odometer or an exact earlier mileage
+- Logs several items from one service visit at a shared odometer reading
 - Extends maintenance reminders without recording false maintenance
 - Provides Due Soon and All Maintenance views
 - Includes optional scheduled notifications
@@ -63,7 +64,7 @@ After restarting Home Assistant:
 4. Search for **Vehicle Maintenance**.
 5. Enter a display name for the vehicle.
 6. Select the vehicle's odometer sensor.
-7. Review the maintenance checklist. All built-in services and milestones are selected by default. Check or uncheck as many items as needed, then submit the list once.
+7. Review the four maintenance checklists: Scheduled Service and Replacements, Inspections, Condition-Based Reminders, and Mileage Milestones. All built-in items are selected by default. Check or uncheck as many items as needed, then submit once.
 8. Review the mileage interval for each selected service.
 9. Configure optional maintenance notifications.
 10. Finish the setup.
@@ -247,6 +248,8 @@ An extended item remains visible here and shows the mileage when it will require
 
 Tap a maintenance row and select **Log Maintenance**.
 
+The popup begins with a short **Why it matters** summary explaining the purpose of that maintenance item. This is informational guidance; use the schedule appropriate for the vehicle and its operating conditions.
+
 You can log maintenance in two ways.
 
 ### Use the current odometer
@@ -279,6 +282,16 @@ The entered mileage is treated as the actual completion mileage. The next due mi
 The card shows the calculated next due mileage before saving.
 
 Logging maintenance clears any active extension for that maintenance item.
+
+## Log a Service Visit
+
+Use **Log a Service Visit** when several maintenance items were completed together, such as an oil change, tire rotation, and cabin air filter replacement.
+
+1. Select **Log a Service Visit** on the card.
+2. Check every maintenance item completed during the visit. Use **Select Due Items** as a shortcut when appropriate.
+3. Log the visit using the current odometer, or enter the exact mileage if the visit happened earlier.
+
+The integration applies one factual mileage to every selected item, calculates each recurring item's next due mileage from its own interval, clears active extensions for those items, and saves the vehicle once. One-time mileage milestones retain their milestone behavior.
 
 ## Extend Maintenance
 
@@ -357,6 +370,8 @@ If no effective odometer is available:
 
 Notifications are optional and configured separately for each vehicle.
 
+The integration schedules these notifications internally for each vehicle. It does not create a separate Home Assistant automation entity, so nothing new appears under **Settings > Automations & scenes**.
+
 Available settings include:
 
 - Enable or disable notifications
@@ -383,6 +398,8 @@ Empty notifications are not sent.
 Notification settings can be changed under:
 
 **Settings → Devices & services → Vehicle Maintenance → Configure**
+
+Choose the vehicle and continue through its configuration screens to **Maintenance notifications**. Changes reload that vehicle's internal schedule automatically. Disable the built-in notification before creating a separate Home Assistant notification automation, or both may send alerts.
 
 ## Entities
 

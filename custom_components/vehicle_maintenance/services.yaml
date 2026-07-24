@@ -13,7 +13,48 @@ log_maintenance:
     mileage:
       name: Mileage when completed
       required: false
-      selector: {number: {min: 0, max: 1000000, mode: box}}
+      selector: {number: {min: 1, max: 1000000, mode: box}}
+
+log_maintenance_batch:
+  name: Log a service visit
+  description: Complete several tracked maintenance items at one effective or exact odometer reading.
+  fields:
+    entry_id: *entry
+    services:
+      name: Maintenance completed
+      required: true
+      selector:
+        select:
+          multiple: true
+          options:
+            - {label: Oil Change, value: oil_change}
+            - {label: Tire Rotation, value: tire_rotation}
+            - {label: Engine Air Filter, value: engine_air_filter}
+            - {label: Cabin Air Filter, value: cabin_air_filter}
+            - {label: Brake Fluid, value: brake_fluid}
+            - {label: Coolant, value: coolant}
+            - {label: CVT Fluid Inspection, value: transmission_fluid}
+            - {label: Differential Fluid Inspection, value: differential_service}
+            - {label: Wiper Blades, value: wiper_blades}
+            - {label: Battery Check, value: battery_check}
+            - {label: Tire Replacement, value: tire_replacement}
+            - {label: Spark Plugs, value: spark_plugs}
+            - {label: Brake Pad Inspection, value: brake_pads}
+            - {label: Wheel Alignment Check, value: wheel_alignment}
+            - {label: PCV Valve Inspection, value: pcv_valve}
+            - {label: Fuel Filter, value: fuel_filter}
+            - {label: Timing Belt or Chain Inspection, value: timing_inspection}
+            - {label: "30,000 mi Service", value: service_30k}
+            - {label: "60,000 mi Service", value: service_60k}
+            - {label: "90,000 mi Service", value: service_90k}
+            - {label: "120,000 mi Service", value: service_120k}
+            - {label: "125,000 mi Service", value: service_125k}
+            - {label: "180,000 mi Service", value: service_180k}
+            - {label: "200,000 mi Service", value: service_200k}
+    mileage:
+      name: Mileage when completed
+      required: false
+      selector: {number: {min: 1, max: 1000000, mode: box}}
 
 snooze_maintenance:
   name: Extend maintenance

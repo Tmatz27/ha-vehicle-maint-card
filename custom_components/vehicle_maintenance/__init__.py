@@ -6,7 +6,6 @@ from datetime import time
 from pathlib import Path
 
 import voluptuous as vol
-
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
@@ -18,12 +17,12 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     ATTR_ENTRY_ID,
     CONF_INITIAL_INTERVALS,
+    CONF_INTERVALS,
     CONF_NOTIFY_ENABLED,
     CONF_NOTIFY_SERVICE,
     CONF_NOTIFY_THRESHOLD,
     CONF_NOTIFY_TIME,
     CONF_NOTIFY_WEEKDAY,
-    CONF_INTERVALS,
     CONF_ODOMETER_ENTITY,
     CONF_SERVICES,
     CONF_VEHICLE_NAME,
@@ -38,6 +37,7 @@ from .const import (
 from .manager import VehicleManager
 from .model import (
     complete_service,
+    complete_service_batch,
     format_notification_item,
     initialize_service,
     notification_items,
@@ -47,9 +47,20 @@ from .model import (
 )
 
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.2"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.3"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+BATCH_LOG_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTRY_ID): cv.string,
+        vol.Required("services"): vol.All(
+            cv.ensure_list,
+            [vol.In(SERVICE_CATALOG)],
+            vol.Length(min=1),
+        ),
+        vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    }
+)
 
 
 def _validate_snooze_data(data: dict) -> dict:
@@ -70,6 +81,31 @@ def _validate_set_data(data: dict) -> dict:
     return data
 
 
+def _record_for(manager: VehicleManager, service: str):
+    record = manager.records.get(service)
+    if record is None or service not in manager.config[CONF_SERVICES]:
+        raise vol.Invalid("Service is not tracked by this vehicle")
+    return record
+
+
+async def _async_log_maintenance_batch(
+    manager: VehicleManager, services: list[str], mileage: int | None = None
+) -> None:
+    keys = list(dict.fromkeys(services))
+    records = [
+        (
+            _record_for(manager, key),
+            bool(SERVICE_CATALOG[key].get("milestone")),
+        )
+        for key in keys
+    ]
+    completion_mileage = manager.effective_odometer if mileage is None else mileage
+    if completion_mileage is None:
+        raise vol.Invalid("No effective odometer is available")
+    complete_service_batch(records, completion_mileage)
+    await manager.async_save()
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register frontend and actions exactly once for the integration."""
     card_path = Path(__file__).parent / "www" / "vehicle-maint-card.js"
@@ -85,12 +121,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise vol.Invalid("Unknown vehicle entry")
         return manager
 
-    def record_for(manager: VehicleManager, service: str):
-        record = manager.records.get(service)
-        if record is None or service not in manager.config["services"]:
-            raise vol.Invalid("Service is not tracked by this vehicle")
-        return record
-
     async def log_maintenance(call: ServiceCall) -> None:
         manager = manager_for(call)
         key = call.data["service"]
@@ -98,18 +128,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         if mileage is None:
             raise vol.Invalid("No effective odometer is available")
         complete_service(
-            record_for(manager, key),
+            _record_for(manager, key),
             mileage,
             milestone=bool(SERVICE_CATALOG[key].get("milestone")),
         )
         await manager.async_save()
+
+    async def log_maintenance_batch(call: ServiceCall) -> None:
+        manager = manager_for(call)
+        await _async_log_maintenance_batch(
+            manager,
+            call.data["services"],
+            call.data.get("mileage"),
+        )
 
     async def snooze_maintenance(call: ServiceCall) -> None:
         manager = manager_for(call)
         if manager.effective_odometer is None:
             raise vol.Invalid("No effective odometer is available")
         snooze_service(
-            record_for(manager, call.data["service"]),
+            _record_for(manager, call.data["service"]),
             manager.effective_odometer,
             miles=call.data.get("miles"),
             until_mileage=call.data.get("until_mileage"),
@@ -118,7 +156,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def clear_snooze(call: ServiceCall) -> None:
         manager = manager_for(call)
-        record_for(manager, call.data["service"]).snoozed_until_mileage = None
+        _record_for(manager, call.data["service"]).snoozed_until_mileage = None
         await manager.async_save()
 
     async def set_maintenance(call: ServiceCall) -> None:
@@ -128,7 +166,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             key, SERVICE_CATALOG[key].get("initial_interval")
         )
         initialize_service(
-            record_for(manager, key),
+            _record_for(manager, key),
             call.data["mode"],
             call.data.get("mileage"),
             initial_due_mileage=initial_due,
@@ -142,7 +180,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             key, SERVICE_CATALOG[key].get("initial_interval")
         )
         initialize_service(
-            record_for(manager, key),
+            _record_for(manager, key),
             "never_performed",
             initial_due_mileage=initial_due,
         )
@@ -165,9 +203,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         schema=vol.Schema(
             {
                 **common,
-                vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+                vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=1)),
             }
         ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "log_maintenance_batch",
+        log_maintenance_batch,
+        schema=BATCH_LOG_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN,

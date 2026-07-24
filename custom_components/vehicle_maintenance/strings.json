@@ -11,9 +11,12 @@
       },
       "services": {
         "title": "Choose maintenance to track",
-        "description": "All services are selected for {vehicle}. Check or uncheck as many items as you want, then select Submit once.",
+        "description": "All maintenance is selected for {vehicle}. Use the four grouped checklists to add or remove as many items as you want, then select Submit once.",
         "data": {
-          "services": "Services to track"
+          "scheduled_services": "Scheduled service and replacements",
+          "inspection_services": "Inspections",
+          "condition_services": "Condition-based reminders",
+          "milestone_services": "Mileage milestones"
         }
       },
       "intervals": {
@@ -79,9 +82,12 @@
       },
       "services": {
         "title": "Choose maintenance to track",
-        "description": "Check or uncheck every item you want for {vehicle}, then select Submit once.",
+        "description": "Use the four grouped checklists to add or remove every item you want for {vehicle}, then select Submit once.",
         "data": {
-          "services": "Services to track"
+          "scheduled_services": "Scheduled service and replacements",
+          "inspection_services": "Inspections",
+          "condition_services": "Condition-based reminders",
+          "milestone_services": "Mileage milestones"
         }
       },
       "intervals": {
