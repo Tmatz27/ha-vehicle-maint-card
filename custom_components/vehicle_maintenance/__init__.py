@@ -32,8 +32,8 @@ from .const import (
     DEFAULT_NOTIFICATION_TIME,
     DEFAULT_NOTIFICATION_WEEKDAY,
     DOMAIN,
-    FILTER_ACTIONS,
     FILTER_ACTION_REPLACE,
+    FILTER_ACTIONS,
     FILTER_SERVICE_KEYS,
     PLATFORMS,
     PREVIOUS_DEFAULT_INTERVALS,
@@ -41,9 +41,9 @@ from .const import (
 )
 from .manager import VehicleManager
 from .model import (
+    complete_filter_service,
     complete_service,
     complete_service_batch,
-    complete_filter_service,
     format_notification_item,
     initialize_service,
     notification_items,
