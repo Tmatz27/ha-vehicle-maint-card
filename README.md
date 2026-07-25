@@ -18,9 +18,12 @@ Each vehicle is configured through the Home Assistant interface and receives its
 - Shows overdue and upcoming maintenance
 - Logs maintenance using the current odometer or an exact earlier mileage
 - Logs several items from one service visit at a shared odometer reading
+- Sorts service-visit choices by miles remaining
+- Tracks washes, replacements, and total miles for optional reusable air filters
 - Extends maintenance reminders without recording false maintenance
 - Provides Due Soon and All Maintenance views
-- Includes optional scheduled notifications
+- Includes optional scheduled notifications to multiple devices or notify groups
+- Provides direct settings pages for vehicle details, services and intervals, and notifications
 - Includes a mobile-friendly dashboard card
 - Supports a per-card accent color or the active Home Assistant theme color
 - Requires no additional custom dashboard cards
@@ -65,8 +68,8 @@ After restarting Home Assistant:
 5. Enter a display name for the vehicle.
 6. Select the vehicle's odometer sensor.
 7. Review the four maintenance checklists: Scheduled Service and Replacements, Inspections, Condition-Based Reminders, and Mileage Milestones. All built-in items are selected by default. Check or uncheck as many items as needed, then submit once.
-8. Review the mileage interval for each selected service.
-9. Configure optional maintenance notifications.
+8. Review the mileage interval for each selected service. If an installed engine or cabin filter is reusable, enable its washable setting.
+9. Configure optional maintenance notifications and select every recipient or notify group that should receive the summary.
 10. Finish the setup.
 
 Home Assistant creates a separate device for the vehicle.
@@ -130,6 +133,8 @@ The starting intervals follow the normal-use schedule in Subaru of America's [20
 | Tire Replacement | 50,000 mi | Planning reminder; replace by tread, age, and condition |
 | PCV Valve | 60,000 mi | Inspection reminder |
 | Timing Belt or Chain | 100,000 mi | Inspection reminder; model dependent |
+
+The engine and cabin air filters intentionally do not share one schedule. Subaru's normal-use schedule replaces the engine air cleaner element every 30,000 miles and the HVAC/cabin filter every 12,000 miles. Both values remain editable for each vehicle.
 
 Subaru specifies shorter intervals for some severe driving conditions. For example, the booklet calls for 3,000-mile oil changes under severe use and approximately 24,855-mile CVT fluid replacement when applicable. Always review the booklet for the exact model, year, engine, location, and driving conditions.
 
@@ -283,13 +288,25 @@ The card shows the calculated next due mileage before saving.
 
 Logging maintenance clears any active extension for that maintenance item.
 
+### Washable air filters
+
+Engine and cabin filters can be marked washable independently under **Tracked services and intervals**. Leave the setting off for disposable filters.
+
+When a filter is washable, its maintenance popup asks whether you:
+
+- **Washed / cleaned** it, which increases the wash count and preserves the filter's original installed mileage
+- **Replaced** it, which starts a new filter at that mileage and resets the wash count
+
+The popup displays the number of washes and total miles on the installed filter. If the integration does not yet know when the current reusable filter was installed, log its next replacement using the current odometer or the exact earlier replacement mileage. Total filter mileage is tracked from that point forward.
+
 ## Log a Service Visit
 
 Use **Log a Service Visit** when several maintenance items were completed together, such as an oil change, tire rotation, and cabin air filter replacement.
 
 1. Select **Log a Service Visit** on the card.
-2. Check every maintenance item completed during the visit. Use **Select Due Items** as a shortcut when appropriate.
-3. Log the visit using the current odometer, or enter the exact mileage if the visit happened earlier.
+2. Check every maintenance item completed during the visit. Items are ordered by miles remaining, with the most urgent first. Use **Select Due Items** as a shortcut when appropriate.
+3. For each selected washable filter, choose **Wash** or **Replace**.
+4. Log the visit using the current odometer, or enter the exact mileage if the visit happened earlier.
 
 The integration applies one factual mileage to every selected item, calculates each recurring item's next due mileage from its own interval, clears active extensions for those items, and saves the vehicle once. One-time mileage milestones retain their milestone behavior.
 
@@ -375,15 +392,27 @@ The integration schedules these notifications internally for each vehicle. It do
 Available settings include:
 
 - Enable or disable notifications
-- Notification target
+- One or more notification recipients or groups
 - Notification mileage threshold
 - Notification weekday
 - Notification time
 
-Select the phone or other notify entity that should receive the summary. For
-example:
+Select every phone or other notify entity that should receive the summary. For example:
 
 `notify.sm_s926u`
+
+Legacy YAML notification groups are also supported. A group such as:
+
+```yaml
+notify:
+  - name: family_mobile_devices
+    platform: group
+    services:
+      - service: mobile_app_sm_s926u
+      - service: mobile_app_pixel_10_pro_xl
+```
+
+appears as `notify.family_mobile_devices` and can be selected alongside individual devices.
 
 The integration sends modern notify entities through Home Assistant's
 `notify.send_message` action. Existing configurations that use a legacy
@@ -404,7 +433,7 @@ Notification settings can be changed under:
 
 **Settings → Devices & services → Vehicle Maintenance → Configure**
 
-Choose the vehicle and continue through its configuration screens to **Maintenance notifications**. Changes reload that vehicle's internal schedule automatically. Disable the built-in notification before creating a separate Home Assistant notification automation, or both may send alerts.
+Choose **Notifications** from the options menu. Changes reload that vehicle's internal schedule automatically. Disable the built-in notification before creating a separate Home Assistant notification automation, or both may send alerts.
 
 ## Entities
 
@@ -462,14 +491,11 @@ To change a vehicle:
 4. Select the vehicle.
 5. Select **Configure**.
 
-You can change:
+Configure opens a menu with:
 
-- Vehicle name
-- Odometer entity
-- Tracked maintenance services
-- Service intervals
-- Notification settings
-- Notification schedule
+- **Vehicle and odometer** for the vehicle name and source sensor
+- **Tracked services and intervals** for all enabled maintenance, custom intervals, and washable-filter settings
+- **Notifications** for recipients, groups, threshold, weekday, and time
 
 Deselecting a maintenance service removes it from the active card and notifications. Its saved maintenance value is retained in case the service is enabled again later.
 

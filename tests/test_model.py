@@ -114,7 +114,8 @@ def test_batch_completion_logs_one_odometer_and_each_service_semantics():
     milestone = ServiceRecord(True, interval_miles=60000)
 
     model.complete_service_batch(
-        [(oil, False), (rotation, False), (milestone, True)], 44973
+        [(oil, False, None), (rotation, False, None), (milestone, True, None)],
+        44973,
     )
 
     assert oil.last_completed_mileage == 44973
@@ -123,6 +124,40 @@ def test_batch_completion_logs_one_odometer_and_each_service_semantics():
     assert model.scheduled_due_mileage(oil) == 50973
     assert milestone.milestone_completed
     assert milestone.milestone_completed_mileage == 44973
+
+
+def test_washable_filter_tracks_washes_without_resetting_filter_age():
+    record = ServiceRecord(True, 30000, 12000)
+
+    model.complete_filter_service(record, 30000, action="replace")
+    model.complete_filter_service(record, 42000, action="wash")
+    model.complete_filter_service(record, 54000, action="wash")
+
+    assert record.last_completed_mileage == 54000
+    assert record.filter_installed_mileage == 30000
+    assert record.last_washed_mileage == 54000
+    assert record.last_filter_action == "wash"
+    assert record.wash_count == 2
+    assert model.scheduled_due_mileage(record) == 66000
+
+
+def test_replacing_washable_filter_resets_its_wash_count_and_age():
+    record = ServiceRecord(
+        True,
+        42000,
+        12000,
+        wash_count=3,
+        filter_installed_mileage=18000,
+        last_washed_mileage=42000,
+        last_filter_action="wash",
+    )
+
+    model.complete_filter_service(record, 50000, action="replace")
+
+    assert record.filter_installed_mileage == 50000
+    assert record.last_washed_mileage is None
+    assert record.last_filter_action == "replace"
+    assert record.wash_count == 0
 
 
 def test_odometer_rejects_zero_and_decrease():
@@ -239,6 +274,10 @@ def test_storage_migration_versions_and_future_rejection():
                 "milestone_completed": False,
                 "milestone_completed_mileage": None,
                 "initial_due_mileage_applied": False,
+                "wash_count": 0,
+                "filter_installed_mileage": None,
+                "last_washed_mileage": None,
+                "last_filter_action": None,
             }
         },
     }

@@ -14,17 +14,20 @@ from .const import (
     CONF_INTERVALS,
     CONF_NOTIFY_ENABLED,
     CONF_NOTIFY_SERVICE,
+    CONF_NOTIFY_TARGETS,
     CONF_NOTIFY_THRESHOLD,
     CONF_NOTIFY_TIME,
     CONF_NOTIFY_WEEKDAY,
     CONF_ODOMETER_ENTITY,
     CONF_SERVICES,
     CONF_VEHICLE_NAME,
+    CONF_WASHABLE_FILTERS,
     DEFAULT_NOTIFICATION_THRESHOLD,
     DEFAULT_NOTIFICATION_TIME,
     DEFAULT_NOTIFICATION_WEEKDAY,
     DEFAULT_SERVICES,
     DOMAIN,
+    FILTER_SERVICE_KEYS,
     SERVICE_CATALOG,
 )
 
@@ -115,7 +118,48 @@ def _services_schema(defaults: dict) -> vol.Schema:
     return vol.Schema(fields)
 
 
-def _notification_schema(defaults: dict) -> vol.Schema:
+def _configured_notification_targets(values: dict) -> list[str]:
+    targets = values.get(CONF_NOTIFY_TARGETS)
+    if targets is None:
+        targets = values.get(CONF_NOTIFY_SERVICE, "")
+    if isinstance(targets, str):
+        targets = [targets] if targets.strip() else []
+    return list(
+        dict.fromkeys(
+            str(target).strip() for target in targets or [] if str(target).strip()
+        )
+    )
+
+
+def _notification_options(hass, defaults: dict) -> list[selector.SelectOptionDict]:
+    labels: dict[str, str] = {}
+    for entity_id in hass.states.async_entity_ids("notify"):
+        state = hass.states.get(entity_id)
+        friendly_name = (
+            state.attributes.get("friendly_name") if state is not None else None
+        )
+        label = friendly_name or entity_id
+        labels[entity_id] = f"{label} ({entity_id})"
+
+    for service in hass.services.async_services().get("notify", {}):
+        if service == "send_message":
+            continue
+        target = f"notify.{service}"
+        labels.setdefault(
+            target,
+            f"{service.replace('_', ' ').title()} group or action ({target})",
+        )
+
+    for target in _configured_notification_targets(defaults):
+        labels.setdefault(target, f"Configured target ({target})")
+
+    return [
+        selector.SelectOptionDict(value=target, label=label)
+        for target, label in sorted(labels.items(), key=lambda item: item[1].lower())
+    ]
+
+
+def _notification_schema(hass, defaults: dict) -> vol.Schema:
     weekdays = [
         ("mon", "Monday"),
         ("tue", "Tuesday"),
@@ -132,10 +176,14 @@ def _notification_schema(defaults: dict) -> vol.Schema:
                 default=defaults.get(CONF_NOTIFY_ENABLED, False),
             ): selector.BooleanSelector(),
             vol.Optional(
-                CONF_NOTIFY_SERVICE,
-                default=defaults.get(CONF_NOTIFY_SERVICE, ""),
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="notify")
+                CONF_NOTIFY_TARGETS,
+                default=_configured_notification_targets(defaults),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=_notification_options(hass, defaults),
+                    multiple=True,
+                    mode=selector.SelectSelectorMode.LIST,
+                )
             ),
             vol.Optional(
                 CONF_NOTIFY_THRESHOLD,
@@ -170,7 +218,10 @@ def _notification_schema(defaults: dict) -> vol.Schema:
 
 
 def _interval_schema(
-    services: list[str], current: dict, current_initial: dict
+    services: list[str],
+    current: dict,
+    current_initial: dict,
+    current_washable: list[str] | None = None,
 ) -> vol.Schema:
     fields = {}
     number_selector = selector.NumberSelector(
@@ -196,6 +247,13 @@ def _interval_schema(
                 default=int(current.get(key, definition.get("interval") or 1)),
             )
         ] = number_selector
+        if key in FILTER_SERVICE_KEYS:
+            fields[
+                vol.Required(
+                    f"washable_{key}",
+                    default=key in set(current_washable or []),
+                )
+            ] = selector.BooleanSelector()
     return vol.Schema(fields)
 
 
@@ -207,6 +265,16 @@ def _selected_initial_intervals(
         for key in services
         if SERVICE_CATALOG[key].get("initial_interval") is not None
     }
+
+
+def _selected_washable_filters(
+    services: list[str], user_input: dict
+) -> list[str]:
+    return [
+        key
+        for key in FILTER_SERVICE_KEYS
+        if key in services and user_input.get(f"washable_{key}", False)
+    ]
 
 
 def _normalize_time(value) -> str:
@@ -245,20 +313,24 @@ def _vehicle_errors(hass, user_input: dict, entries, current_entry_id=None) -> d
 def _notification_errors(hass, user_input: dict) -> dict:
     errors = {}
     if user_input.get(CONF_NOTIFY_ENABLED):
-        target = str(user_input.get(CONF_NOTIFY_SERVICE, "")).strip()
-        if "." not in target:
-            errors[CONF_NOTIFY_SERVICE] = "invalid_notify_action"
-        else:
+        targets = _configured_notification_targets(user_input)
+        if not targets:
+            errors[CONF_NOTIFY_TARGETS] = "invalid_notify_action"
+        for target in targets:
+            if "." not in target:
+                errors[CONF_NOTIFY_TARGETS] = "invalid_notify_action"
+                break
             domain, service = target.split(".", 1)
             is_notify_entity = domain == "notify" and hass.states.get(target) is not None
             is_legacy_action = hass.services.has_service(domain, service)
             if not is_notify_entity and not is_legacy_action:
-                errors[CONF_NOTIFY_SERVICE] = "invalid_notify_action"
+                errors[CONF_NOTIFY_TARGETS] = "invalid_notify_action"
+                break
     return errors
 
 
 class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 3
+    VERSION = 4
 
     def __init__(self) -> None:
         self._pending: dict = {}
@@ -310,10 +382,13 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._pending[CONF_INITIAL_INTERVALS] = _selected_initial_intervals(
                 self._pending[CONF_SERVICES], user_input
             )
+            self._pending[CONF_WASHABLE_FILTERS] = _selected_washable_filters(
+                self._pending[CONF_SERVICES], user_input
+            )
             return await self.async_step_notifications()
         return self.async_show_form(
             step_id="intervals",
-            data_schema=_interval_schema(self._pending[CONF_SERVICES], {}, {}),
+            data_schema=_interval_schema(self._pending[CONF_SERVICES], {}, {}, []),
             description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
         )
 
@@ -323,7 +398,7 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if errors:
                 return self.async_show_form(
                     step_id="notifications",
-                    data_schema=_notification_schema(user_input),
+                    data_schema=_notification_schema(self.hass, user_input),
                     errors=errors,
                     description_placeholders={
                         "vehicle": self._pending[CONF_VEHICLE_NAME]
@@ -337,7 +412,7 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(title=title, data=self._pending)
         return self.async_show_form(
             step_id="notifications",
-            data_schema=_notification_schema({}),
+            data_schema=_notification_schema(self.hass, {}),
             description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
         )
 
@@ -354,6 +429,18 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         self._current = {**self._entry.data, **self._entry.options}
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["vehicle", "services", "notifications"],
+        )
+
+    def _save_options(self, changes: dict):
+        options = {**self._current, **changes}
+        options.pop(CONF_VEHICLE_NAME, None)
+        options.pop(CONF_NOTIFY_SERVICE, None)
+        return self.async_create_entry(title="", data=options)
+
+    async def async_step_vehicle(self, user_input=None):
         defaults = {**self._current, CONF_VEHICLE_NAME: self._entry.title}
         if user_input is not None:
             errors = _vehicle_errors(
@@ -364,14 +451,16 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
             )
             if errors:
                 return self.async_show_form(
-                    step_id="init",
+                    step_id="vehicle",
                     data_schema=_vehicle_schema(user_input, include_name=True),
                     errors=errors,
                 )
-            self._pending = dict(user_input)
-            return await self.async_step_services()
+            values = dict(user_input)
+            name = values.pop(CONF_VEHICLE_NAME)
+            self.hass.config_entries.async_update_entry(self._entry, title=name)
+            return self._save_options(values)
         return self.async_show_form(
-            step_id="init",
+            step_id="vehicle",
             data_schema=_vehicle_schema(defaults, include_name=True),
         )
 
@@ -383,36 +472,60 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
                     step_id="services",
                     data_schema=_services_schema(user_input),
                     errors={"base": "select_at_least_one_service"},
-                    description_placeholders={
-                        "vehicle": self._pending[CONF_VEHICLE_NAME]
-                    },
+                    description_placeholders={"vehicle": self._entry.title},
                 )
             self._pending[CONF_SERVICES] = selected
             return await self.async_step_intervals()
         return self.async_show_form(
             step_id="services",
             data_schema=_services_schema(self._current),
-            description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
+            description_placeholders={"vehicle": self._entry.title},
         )
 
     async def async_step_intervals(self, user_input=None):
         if user_input is not None:
-            self._pending[CONF_INTERVALS] = {
-                key: int(user_input[f"interval_{key}"])
-                for key in self._pending[CONF_SERVICES]
-            }
-            self._pending[CONF_INITIAL_INTERVALS] = _selected_initial_intervals(
-                self._pending[CONF_SERVICES], user_input
+            intervals = dict(self._current.get(CONF_INTERVALS, {}))
+            intervals.update(
+                {
+                    key: int(user_input[f"interval_{key}"])
+                    for key in self._pending[CONF_SERVICES]
+                }
             )
-            return await self.async_step_notifications()
+            initial_intervals = dict(self._current.get(CONF_INITIAL_INTERVALS, {}))
+            initial_intervals.update(
+                _selected_initial_intervals(self._pending[CONF_SERVICES], user_input)
+            )
+            washable = {
+                key
+                for key in self._current.get(CONF_WASHABLE_FILTERS, [])
+                if key in self._pending[CONF_SERVICES]
+            }
+            for key in FILTER_SERVICE_KEYS:
+                if key not in self._pending[CONF_SERVICES]:
+                    continue
+                if user_input.get(f"washable_{key}", False):
+                    washable.add(key)
+                else:
+                    washable.discard(key)
+            return self._save_options(
+                {
+                    CONF_SERVICES: self._pending[CONF_SERVICES],
+                    CONF_INTERVALS: intervals,
+                    CONF_INITIAL_INTERVALS: initial_intervals,
+                    CONF_WASHABLE_FILTERS: [
+                        key for key in FILTER_SERVICE_KEYS if key in washable
+                    ],
+                }
+            )
         return self.async_show_form(
             step_id="intervals",
             data_schema=_interval_schema(
                 self._pending[CONF_SERVICES],
                 self._current.get(CONF_INTERVALS, {}),
                 self._current.get(CONF_INITIAL_INTERVALS, {}),
+                self._current.get(CONF_WASHABLE_FILTERS, []),
             ),
-            description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
+            description_placeholders={"vehicle": self._entry.title},
         )
 
     async def async_step_notifications(self, user_input=None):
@@ -421,21 +534,15 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
             if errors:
                 return self.async_show_form(
                     step_id="notifications",
-                    data_schema=_notification_schema(user_input),
+                    data_schema=_notification_schema(self.hass, user_input),
                     errors=errors,
-                    description_placeholders={
-                        "vehicle": self._pending[CONF_VEHICLE_NAME]
-                    },
+                    description_placeholders={"vehicle": self._entry.title},
                 )
-            self._pending.update(user_input)
-            self._pending[CONF_NOTIFY_TIME] = _normalize_time(
-                self._pending[CONF_NOTIFY_TIME]
-            )
-            name = self._pending.pop(CONF_VEHICLE_NAME)
-            self.hass.config_entries.async_update_entry(self._entry, title=name)
-            return self.async_create_entry(title="", data=self._pending)
+            values = dict(user_input)
+            values[CONF_NOTIFY_TIME] = _normalize_time(values[CONF_NOTIFY_TIME])
+            return self._save_options(values)
         return self.async_show_form(
             step_id="notifications",
-            data_schema=_notification_schema(self._current),
-            description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
+            data_schema=_notification_schema(self.hass, self._current),
+            description_placeholders={"vehicle": self._entry.title},
         )

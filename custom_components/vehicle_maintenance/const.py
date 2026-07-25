@@ -7,8 +7,10 @@ CONF_ODOMETER_ENTITY = "odometer_entity"
 CONF_SERVICES = "services"
 CONF_INTERVALS = "intervals"
 CONF_INITIAL_INTERVALS = "initial_intervals"
+CONF_WASHABLE_FILTERS = "washable_filters"
 CONF_NOTIFY_ENABLED = "notify_enabled"
 CONF_NOTIFY_SERVICE = "notify_service"
+CONF_NOTIFY_TARGETS = "notify_targets"
 CONF_NOTIFY_THRESHOLD = "notify_threshold"
 CONF_NOTIFY_WEEKDAY = "notify_weekday"
 CONF_NOTIFY_TIME = "notify_time"
@@ -19,6 +21,10 @@ DEFAULT_NOTIFICATION_THRESHOLD = 1500
 DEFAULT_NOTIFICATION_WEEKDAY = "sun"
 DEFAULT_NOTIFICATION_TIME = "17:00:00"
 DEFAULT_UPCOMING_MILES = 2000
+FILTER_SERVICE_KEYS = ("engine_air_filter", "cabin_air_filter")
+FILTER_ACTION_WASH = "wash"
+FILTER_ACTION_REPLACE = "replace"
+FILTER_ACTIONS = (FILTER_ACTION_WASH, FILTER_ACTION_REPLACE)
 
 # Defaults follow the normal-use schedule for recent U.S.-market Subaru vehicles
 # where Subaru publishes a mileage interval. Condition-based reminders are marked

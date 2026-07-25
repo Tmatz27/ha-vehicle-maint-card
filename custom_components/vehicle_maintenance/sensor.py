@@ -15,6 +15,7 @@ from .const import (
     ATTR_SERVICE_KEY,
     CONF_INITIAL_INTERVALS,
     CONF_SERVICES,
+    CONF_WASHABLE_FILTERS,
     DEFAULT_UPCOMING_MILES,
     DOMAIN,
     SERVICE_CATALOG,
@@ -196,6 +197,16 @@ class MaintenanceSensor(VehicleEntity):
             if odometer is None
             else miles_remaining(record, odometer, milestone=milestone)
         )
+        washable = self.service_key in self.manager.config.get(
+            CONF_WASHABLE_FILTERS, []
+        )
+        filter_miles = (
+            None
+            if not washable
+            or odometer is None
+            or record.filter_installed_mileage is None
+            else max(0, odometer - record.filter_installed_mileage)
+        )
         return {
             ATTR_ENTRY_ID: self.entry.entry_id,
             ATTR_SERVICE_KEY: self.service_key,
@@ -225,4 +236,14 @@ class MaintenanceSensor(VehicleEntity):
             "milestone": milestone,
             "milestone_completed": record.milestone_completed,
             "milestone_completed_mileage": record.milestone_completed_mileage,
+            "washable": washable,
+            "wash_count": record.wash_count if washable else None,
+            "filter_installed_mileage": (
+                record.filter_installed_mileage if washable else None
+            ),
+            "last_washed_mileage": (
+                record.last_washed_mileage if washable else None
+            ),
+            "last_filter_action": record.last_filter_action if washable else None,
+            "filter_miles": filter_miles,
         }

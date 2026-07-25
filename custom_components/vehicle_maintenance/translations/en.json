@@ -21,12 +21,14 @@
       },
       "intervals": {
         "title": "Review service intervals",
-        "description": "Review the recurring interval for every selected item on {vehicle}. Coolant uses a 137,500-mile first service and the repeat interval shown here.",
+        "description": "Review each interval for {vehicle}. Engine and cabin filters use separate manufacturer defaults. Enable washable tracking only for reusable filters.",
         "data": {
           "interval_oil_change": "Oil Change interval (miles)",
           "interval_tire_rotation": "Tire Rotation interval (miles)",
           "interval_engine_air_filter": "Engine Air Filter interval (miles)",
+          "washable_engine_air_filter": "Engine Air Filter is washable",
           "interval_cabin_air_filter": "Cabin Air Filter interval (miles)",
+          "washable_cabin_air_filter": "Cabin Air Filter is washable",
           "interval_brake_fluid": "Brake Fluid interval (miles)",
           "initial_interval_coolant": "Coolant first service mileage",
           "interval_coolant": "Coolant repeat interval (miles)",
@@ -52,10 +54,10 @@
       },
       "notifications": {
         "title": "Maintenance notifications",
-        "description": "Optionally send one weekly summary for maintenance approaching on {vehicle}.",
+        "description": "Optionally send one weekly summary for maintenance approaching on {vehicle}. Select any number of notify entities, mobile devices, or legacy notify groups.",
         "data": {
           "notify_enabled": "Enable weekly summary",
-          "notify_service": "Notification target",
+          "notify_targets": "Notification recipients and groups",
           "notify_threshold": "Notification threshold (miles)",
           "notify_weekday": "Notification day",
           "notify_time": "Notification time"
@@ -74,7 +76,16 @@
     "step": {
       "init": {
         "title": "Vehicle maintenance options",
-        "description": "Update the vehicle name or authoritative odometer source.",
+        "description": "Choose what you want to change.",
+        "menu_options": {
+          "vehicle": "Vehicle and odometer",
+          "services": "Tracked services and intervals",
+          "notifications": "Notifications"
+        }
+      },
+      "vehicle": {
+        "title": "Vehicle and odometer",
+        "description": "Update the vehicle name or odometer source.",
         "data": {
           "vehicle_name": "Vehicle display name",
           "odometer_entity": "Vehicle odometer sensor"
@@ -92,12 +103,14 @@
       },
       "intervals": {
         "title": "Review service intervals",
-        "description": "Review the recurring interval for every selected item on {vehicle}. Coolant uses a 137,500-mile first service and the repeat interval shown here.",
+        "description": "Review each interval for {vehicle}. Engine and cabin filters use separate manufacturer defaults. Enable washable tracking only for reusable filters.",
         "data": {
           "interval_oil_change": "Oil Change interval (miles)",
           "interval_tire_rotation": "Tire Rotation interval (miles)",
           "interval_engine_air_filter": "Engine Air Filter interval (miles)",
+          "washable_engine_air_filter": "Engine Air Filter is washable",
           "interval_cabin_air_filter": "Cabin Air Filter interval (miles)",
+          "washable_cabin_air_filter": "Cabin Air Filter is washable",
           "interval_brake_fluid": "Brake Fluid interval (miles)",
           "initial_interval_coolant": "Coolant first service mileage",
           "interval_coolant": "Coolant repeat interval (miles)",
@@ -123,10 +136,10 @@
       },
       "notifications": {
         "title": "Maintenance notifications",
-        "description": "Optionally send one weekly summary for maintenance approaching on {vehicle}.",
+        "description": "Optionally send one weekly summary for maintenance approaching on {vehicle}. Select any number of notify entities, mobile devices, or legacy notify groups.",
         "data": {
           "notify_enabled": "Enable weekly summary",
-          "notify_service": "Notification target",
+          "notify_targets": "Notification recipients and groups",
           "notify_threshold": "Notification threshold (miles)",
           "notify_weekday": "Notification day",
           "notify_time": "Notification time"

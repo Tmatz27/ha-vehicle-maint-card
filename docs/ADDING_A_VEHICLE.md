@@ -20,8 +20,8 @@ If the source reports kilometers, create a miles conversion sensor first.
 4. Enter the vehicle display name.
 5. Select its authoritative odometer sensor.
 6. Review the four grouped checklists for scheduled service and replacements, inspections, condition-based reminders, and mileage milestones. The full catalog is selected by default. Check or uncheck every item you want, then submit once.
-7. Review every service interval on the next screen.
-8. Enable notifications if desired and select the notification action.
+7. Review every service interval on the next screen. Engine and cabin filters have separate 30,000-mile and 12,000-mile defaults. Enable the washable setting only for an installed reusable filter.
+8. Enable notifications if desired and select every phone, notify entity, or legacy YAML notify group that should receive the summary.
 9. Finish setup.
 
 The odometer sensor cannot be assigned to two Vehicle Maintenance entries. This prevents two vehicle records from accidentally using the same mileage.
@@ -52,7 +52,7 @@ For each known service:
 4. Use the current odometer or enter the actual earlier completion mileage.
 5. Review the next due preview and save.
 
-If several items were completed during the same visit, select **Log a Service Visit** on the card, check every completed item, and apply one current or exact earlier odometer reading to all of them.
+If several items were completed during the same visit, select **Log a Service Visit** on the card. The checklist is sorted by miles remaining. Check every completed item, choose Wash or Replace for any reusable filter, and apply one current or exact earlier odometer reading to all of them.
 
 Do not enter zero when the previous completion mileage is unknown. Leave the item as Never performed until accurate information is available.
 
@@ -62,13 +62,11 @@ Mileage milestones use the same Log Maintenance workflow when completed.
 
 Open **Settings > Devices & services > Vehicle Maintenance**, select the vehicle, and choose **Configure**.
 
-The options flow can change:
+The options menu provides:
 
-- Display name
-- Odometer source
-- Selected maintenance services
-- Per-vehicle intervals
-- Notification target, threshold, weekday, and time
+- **Vehicle and odometer** for the display name and source
+- **Tracked services and intervals** for selected maintenance, per-vehicle intervals, and reusable-filter settings
+- **Notifications** for multiple recipients or groups, threshold, weekday, and time
 
 The weekly notification schedule is managed inside the integration for each vehicle. It does not appear as a separate item under Home Assistant's Automations & scenes page.
 
