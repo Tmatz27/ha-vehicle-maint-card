@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.1.4";
+const CARD_VERSION = "0.2.0";
 const DOMAIN = "vehicle_maintenance";
 const DEFAULT_UPCOMING_MILES = 2000;
 const DEFAULT_EXTEND_MILES = 1000;
@@ -168,11 +168,13 @@ class VehicleMaintCard extends HTMLElement {
     super();
     this.view = "due";
     this.actionMode = "log";
+    this.filterAction = "wash";
     this.completionMileage = "";
     this.extensionChoice = String(DEFAULT_EXTEND_MILES);
     this.customExtension = "";
     this.batchOpen = false;
     this.batchServices = new Set();
+    this.batchFilterActions = new Map();
     this.batchMileage = "";
     this.serviceEntityIds = [];
     this.error = "";
@@ -211,7 +213,13 @@ class VehicleMaintCard extends HTMLElement {
     if (!entryId || !this._hass) return [];
     const services = Object.values(this._hass.states)
       .filter((entity) => entity.attributes.entry_id === entryId && entity.attributes.service_key)
-      .sort((left, right) => this.serviceSortValue(left) - this.serviceSortValue(right));
+      .sort((left, right) => {
+        const distance = this.serviceSortValue(left) - this.serviceSortValue(right);
+        if (distance !== 0) return distance;
+        return String(left.attributes.service_name || "").localeCompare(
+          String(right.attributes.service_name || ""),
+        );
+      });
     this.serviceEntityIds = services.map((entity) => entity.entity_id);
     return services;
   }
@@ -220,7 +228,7 @@ class VehicleMaintCard extends HTMLElement {
     const attributes = entity.attributes || {};
     if (!attributes.initialized) return 3_000_000_000;
     if (attributes.status === "completed") return 4_000_000_000;
-    if (attributes.deferred) return 2_000_000_000 + (finiteNumber(attributes.snoozed_until_mileage) ?? 999_999_999);
+    if (attributes.deferred) return finiteNumber(attributes.snooze_miles_remaining) ?? 2_999_999_999;
     return finiteNumber(attributes.miles_remaining) ?? 2_999_999_999;
   }
 
@@ -264,6 +272,7 @@ class VehicleMaintCard extends HTMLElement {
       this.selectedService = null;
       this.batchOpen = false;
       this.batchServices.clear();
+      this.batchFilterActions.clear();
       this.batchMileage = "";
       this.showToast(success);
       this.render();
@@ -277,6 +286,7 @@ class VehicleMaintCard extends HTMLElement {
     this.batchOpen = false;
     this.selectedService = key;
     this.actionMode = "log";
+    this.filterAction = "wash";
     this.completionMileage = "";
     const configured = String(this.config.extend_miles);
     this.extensionChoice = QUICK_EXTENSIONS.map(String).includes(configured) ? configured : "custom";
@@ -289,6 +299,7 @@ class VehicleMaintCard extends HTMLElement {
     this.selectedService = null;
     this.batchOpen = true;
     this.batchServices = new Set();
+    this.batchFilterActions = new Map();
     this.batchMileage = "";
     this.error = "";
     this.render();
@@ -328,6 +339,9 @@ class VehicleMaintCard extends HTMLElement {
   }
 
   logPanel(attributes, odometer) {
+    const washable = Boolean(attributes.washable);
+    const actionLabel = this.filterAction === "replace" ? "Replace filter" : "Wash filter";
+    const actionPastTense = this.filterAction === "replace" ? "replaced" : "washed";
     const details = completionDetails(
       this.completionMileage,
       odometer,
@@ -339,12 +353,22 @@ class VehicleMaintCard extends HTMLElement {
       : details.valid
         ? attributes.milestone
           ? `This will mark the milestone complete at ${formatNumber(details.mileage)} mi.`
-          : `Next due at ${formatNumber(details.nextDue)} mi.`
+          : `${washable ? `Filter ${actionPastTense}. ` : ""}Next due at ${formatNumber(details.nextDue)} mi.`
         : details.error;
-    const exactButton = details.valid ? `Log at ${formatNumber(details.mileage)} mi` : "Enter completion mileage";
+    const exactButton = details.valid
+      ? `${washable ? actionLabel : "Log"} at ${formatNumber(details.mileage)} mi`
+      : "Enter completion mileage";
     return `<div class="workflow log-workflow">
+      ${washable ? `<div class="filter-action">
+        <h3>What did you do?</h3>
+        <div class="filter-action-choices">
+          <button class="choice ${this.filterAction === "wash" ? "selected" : ""}" data-filter-action="wash">Wash / clean</button>
+          <button class="choice ${this.filterAction === "replace" ? "selected" : ""}" data-filter-action="replace">Replace filter</button>
+        </div>
+        <small>Washing adds to the clean count and keeps the filter's installed mileage. Replacing starts a new filter and resets its clean count.</small>
+      </div>` : ""}
       <h3>Use the current odometer</h3>
-      <button class="primary log-current" ${odometer === null ? "disabled" : ""}>${odometer === null ? "Odometer unavailable" : `Log at ${formatNumber(odometer)} mi`}</button>
+      <button class="primary log-current" ${odometer === null ? "disabled" : ""}>${odometer === null ? "Odometer unavailable" : `${washable ? actionLabel : "Log"} at ${formatNumber(odometer)} mi`}</button>
       <small>${odometer === null ? "Enter the completion mileage below instead." : "Use this when the maintenance was just completed."}</small>
       <div class="divider"><span>or completed earlier</span></div>
       <label for="completion-mileage">Mileage when completed</label>
@@ -408,6 +432,10 @@ class VehicleMaintCard extends HTMLElement {
         ${initialInterval === null ? "" : this.fact("First due", `${formatNumber(initialInterval)} mi`)}
         ${this.fact("Next due", due === null ? (neverPerformed ? "Never performed" : "Unavailable") : `${formatNumber(due)} mi`)}
         ${target !== null && attributes.deferred ? this.fact("Extended until", `${formatNumber(target)} mi`) : ""}
+        ${attributes.washable ? this.fact("Times washed", formatNumber(attributes.wash_count, "0")) : ""}
+        ${attributes.washable ? this.fact("Miles on this filter", finiteNumber(attributes.filter_miles) === null ? "Set after replacement" : `${formatNumber(attributes.filter_miles)} mi`) : ""}
+        ${attributes.washable && finiteNumber(attributes.filter_installed_mileage) !== null ? this.fact("Filter installed at", `${formatNumber(attributes.filter_installed_mileage)} mi`) : ""}
+        ${attributes.washable && finiteNumber(attributes.last_washed_mileage) !== null ? this.fact("Last washed at", `${formatNumber(attributes.last_washed_mileage)} mi`) : ""}
       </div>
       ${this.error ? `<div class="error">${esc(this.error)}</div>` : ""}
       <div class="action-tabs" role="tablist" aria-label="Maintenance action">
@@ -424,26 +452,22 @@ class VehicleMaintCard extends HTMLElement {
     const services = this.batchEligibleServices();
     const selectedCount = this.batchServices.size;
     const mileageDetails = completionMileageDetails(this.batchMileage, odometer);
-    const groups = [
-      ["Scheduled Service and Replacements", new Set(["perform", "replace"])],
-      ["Inspections", new Set(["inspect"])],
-      ["Condition-Based Reminders", new Set(["condition"])],
-      ["Mileage Milestones", new Set(["milestone"])],
-    ];
-    const groupedRows = groups.map(([label, kinds]) => {
-      const matches = services.filter((entity) => kinds.has(entity.attributes.maintenance_type));
-      if (!matches.length) return "";
-      const rows = matches.map((entity) => {
-        const attributes = entity.attributes;
-        const display = servicePresentation(entity, odometer, this.config.upcoming_miles);
-        const checked = this.batchServices.has(attributes.service_key) ? "checked" : "";
-        return `<label class="batch-item ${esc(display.kind)}">
-          <input type="checkbox" data-batch-service="${esc(attributes.service_key)}" ${checked}>
+    const rows = services.map((entity) => {
+      const attributes = entity.attributes;
+      const display = servicePresentation(entity, odometer, this.config.upcoming_miles);
+      const checked = this.batchServices.has(attributes.service_key) ? "checked" : "";
+      const filterAction = this.batchFilterActions.get(attributes.service_key) || "wash";
+      return `<div class="batch-item ${esc(display.kind)}">
+        <input id="batch-${esc(attributes.service_key)}" type="checkbox" data-batch-service="${esc(attributes.service_key)}" ${checked}>
+        <label class="batch-item-copy" for="batch-${esc(attributes.service_key)}">
           <span class="service-icon"><ha-icon icon="${esc(attributes.icon || entity.attributes.icon || "mdi:wrench-outline")}"></ha-icon></span>
           <span class="row-copy"><b>${esc(attributes.service_name)}</b><small>${esc(display.detail)}</small></span>
-        </label>`;
-      }).join("");
-      return `<section class="batch-group"><h3>${esc(label)}</h3>${rows}</section>`;
+        </label>
+        ${attributes.washable ? `<select class="batch-filter-action" data-batch-filter-action="${esc(attributes.service_key)}" aria-label="${esc(attributes.service_name)} action" ${checked ? "" : "disabled"}>
+          <option value="wash" ${filterAction === "wash" ? "selected" : ""}>Wash</option>
+          <option value="replace" ${filterAction === "replace" ? "selected" : ""}>Replace</option>
+        </select>` : ""}
+      </div>`;
     }).join("");
     const currentText = selectedCount
       ? `Log ${selectedCount} ${selectedCount === 1 ? "item" : "items"} at ${formatNumber(odometer)} mi`
@@ -461,7 +485,8 @@ class VehicleMaintCard extends HTMLElement {
       <p class="batch-intro">Select everything completed during the same visit. One odometer reading will be applied to all selected items.</p>
       ${this.error ? `<div class="error">${esc(this.error)}</div>` : ""}
       <div class="batch-tools"><button class="text-button select-due" type="button">Select Due Items</button><button class="text-button clear-batch" type="button" ${selectedCount ? "" : "disabled"}>Clear</button><b class="batch-count">${selectedCount} selected</b></div>
-      <div class="batch-list">${groupedRows}</div>
+      <small class="batch-sort-note">Sorted by the fewest miles remaining.</small>
+      <div class="batch-list">${rows}</div>
       <div class="batch-log-actions">
         <h3>Use the current odometer</h3>
         <button class="primary batch-log-current" ${odometer === null || !selectedCount ? "disabled" : ""}>${odometer === null ? "Odometer unavailable" : esc(currentText)}</button>
@@ -504,7 +529,7 @@ class VehicleMaintCard extends HTMLElement {
     this.innerHTML = `<style>
       vehicle-maint-card{display:block}
       ha-card{overflow:hidden;border-radius:24px}
-      button,input{font:inherit}
+      button,input,select{font:inherit}
       .hero{display:flex;gap:14px;align-items:center;padding:21px;background:linear-gradient(135deg,color-mix(in srgb,var(--vm-accent) 16%,var(--ha-card-background)),var(--ha-card-background) 70%)}
       .car{display:grid;place-items:center;width:52px;height:52px;border-radius:18px;color:var(--vm-accent);background:color-mix(in srgb,var(--vm-accent) 18%,transparent)}
       .title{flex:1;min-width:0}.title b,.title small{display:block}.title b{overflow:hidden;font-size:1.25rem;text-overflow:ellipsis;white-space:nowrap}.title small{color:var(--secondary-text-color);margin-top:3px}
@@ -524,7 +549,8 @@ class VehicleMaintCard extends HTMLElement {
       .primary,.secondary,.text{width:100%;min-height:48px;margin-top:10px;border:0;border-radius:13px;font-weight:800}.primary{background:var(--vm-accent);color:var(--vm-on-accent)}.secondary{background:color-mix(in srgb,var(--vm-accent) 16%,transparent);color:var(--vm-accent)}.text{background:transparent;color:var(--vm-accent)}button:disabled{cursor:not-allowed;opacity:.45}.workflow>small{display:block;margin-top:8px;color:var(--secondary-text-color)}
       .divider{display:flex;align-items:center;gap:10px;margin:18px 0 4px;color:var(--secondary-text-color);font-size:.78rem;text-transform:uppercase}.divider:before,.divider:after{content:"";height:1px;flex:1;background:var(--divider-color)}.inline-message{min-height:20px;margin-top:8px;color:var(--secondary-text-color);font-size:.84rem}.inline-message.invalid{color:var(--error-color)}
       .extension-choices{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.choice{min-height:44px;padding:6px;border:1px solid var(--divider-color);border-radius:11px;background:transparent;color:var(--primary-text-color);font-size:.82rem;font-weight:700}.choice.selected{border-color:var(--vm-accent);background:color-mix(in srgb,var(--vm-accent) 14%,transparent);color:var(--vm-accent)}
-      .batch-intro{margin:0 0 12px;color:var(--secondary-text-color)}.batch-tools{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:8px;margin:12px 0}.text-button{min-height:38px;padding:6px 10px;border:0;border-radius:10px;background:color-mix(in srgb,var(--vm-accent) 12%,transparent);color:var(--vm-accent);font-weight:700}.batch-count{text-align:right;font-size:.84rem}.batch-list{max-height:38vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--divider-color);border-radius:14px}.batch-group h3{position:sticky;top:0;z-index:1;margin:0;padding:9px 12px;background:var(--secondary-background-color);font-size:.78rem;text-transform:uppercase;color:var(--secondary-text-color)}.batch-item{display:flex;align-items:center;gap:10px;min-height:58px;padding:7px 11px;border-top:1px solid var(--divider-color)}.batch-item input{width:22px;height:22px;flex:0 0 22px;accent-color:var(--vm-accent)}.batch-item .service-icon{width:36px;height:36px;flex-basis:36px}.batch-log-actions{padding-top:15px}.batch-log-actions h3{margin:0 0 8px;font-size:1rem}.batch-log-actions>label{display:block;margin:12px 0 6px;color:var(--secondary-text-color);font-size:.85rem}.batch-log-actions>input{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}.batch-log-actions>small{display:block;margin-top:8px;color:var(--secondary-text-color)}
+      .filter-action{margin-bottom:18px;padding:12px;border-radius:13px;background:var(--secondary-background-color)}.filter-action-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}.filter-action>small{display:block;margin-top:8px;color:var(--secondary-text-color);font-size:.82rem;line-height:1.35}
+      .batch-intro{margin:0 0 12px;color:var(--secondary-text-color)}.batch-tools{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:8px;margin:12px 0 5px}.text-button{min-height:38px;padding:6px 10px;border:0;border-radius:10px;background:color-mix(in srgb,var(--vm-accent) 12%,transparent);color:var(--vm-accent);font-weight:700}.batch-count{text-align:right;font-size:.84rem}.batch-sort-note{display:block;margin:0 0 8px;color:var(--secondary-text-color)}.batch-list{max-height:38vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--divider-color);border-radius:14px}.batch-item{display:flex;align-items:center;gap:10px;min-height:58px;padding:7px 11px;border-top:1px solid var(--divider-color)}.batch-item:first-child{border-top:0}.batch-item>input{width:22px;height:22px;flex:0 0 22px;accent-color:var(--vm-accent)}.batch-item-copy{display:flex;align-items:center;gap:10px;min-width:0;flex:1}.batch-item .service-icon{width:36px;height:36px;flex-basis:36px}.batch-filter-action{min-height:38px;max-width:98px;padding:0 7px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color)}.batch-log-actions{padding-top:15px}.batch-log-actions h3{margin:0 0 8px;font-size:1rem}.batch-log-actions>label{display:block;margin:12px 0 6px;color:var(--secondary-text-color);font-size:.85rem}.batch-log-actions>input{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}.batch-log-actions>small{display:block;margin-top:8px;color:var(--secondary-text-color)}
       .notice{display:flex;flex-direction:column;gap:5px;padding:14px;border-radius:13px;background:var(--secondary-background-color)}.notice span{color:var(--secondary-text-color)}.error{padding:11px;border-radius:11px;background:color-mix(in srgb,var(--error-color) 18%,transparent);color:var(--error-color)}[hidden]{display:none!important}
       @media(max-width:430px){.hero{padding:18px}.panel{padding:17px}.extension-choices{grid-template-columns:1fr 1fr}.facts{grid-template-columns:1fr 1fr}.row-value{max-width:80px}.chips{padding-inline:14px}.batch-tools{grid-template-columns:1fr 1fr}.batch-count{grid-column:1/-1;text-align:left}}
     </style>
@@ -567,11 +593,25 @@ class VehicleMaintCard extends HTMLElement {
       button.onclick = () => { this.actionMode = button.dataset.actionMode; this.error = ""; this.render(); };
     });
 
+    this.querySelectorAll("[data-filter-action]").forEach((button) => {
+      button.onclick = () => {
+        this.filterAction = button.dataset.filterAction;
+        this.error = "";
+        this.render();
+      };
+    });
+    const filterData = attributes.washable ? { filter_action: this.filterAction } : {};
+    const filterVerb = this.filterAction === "replace" ? "replaced" : "washed";
+
     const currentButton = this.querySelector(".log-current");
     if (currentButton) {
       currentButton.onclick = () => {
         if (odometer === null) return;
-        this.call("log_maintenance", { service: this.selectedService }, `${attributes.service_name} logged at ${formatNumber(odometer)} mi`);
+        this.call(
+          "log_maintenance",
+          { service: this.selectedService, ...filterData },
+          `${attributes.service_name} ${attributes.washable ? filterVerb : "logged"} at ${formatNumber(odometer)} mi`,
+        );
       };
     }
 
@@ -582,14 +622,17 @@ class VehicleMaintCard extends HTMLElement {
       this.completionMileage = completionInput.value;
       const details = completionDetails(completionInput.value, odometer, attributes.interval_miles, Boolean(attributes.milestone));
       exactButton.disabled = !details.valid;
-      exactButton.textContent = details.valid ? `Log at ${formatNumber(details.mileage)} mi` : "Enter completion mileage";
+      const actionLabel = attributes.washable
+        ? this.filterAction === "replace" ? "Replace filter" : "Wash filter"
+        : "Log";
+      exactButton.textContent = details.valid ? `${actionLabel} at ${formatNumber(details.mileage)} mi` : "Enter completion mileage";
       completionResult.classList.toggle("invalid", completionInput.value !== "" && !details.valid);
       completionResult.textContent = completionInput.value === ""
         ? "Enter the mileage from when the work was completed."
         : details.valid
           ? attributes.milestone
             ? `This will mark the milestone complete at ${formatNumber(details.mileage)} mi.`
-            : `Next due at ${formatNumber(details.nextDue)} mi.`
+            : `${attributes.washable ? `Filter ${filterVerb}. ` : ""}Next due at ${formatNumber(details.nextDue)} mi.`
           : details.error;
     };
     if (completionInput && exactButton) {
@@ -597,7 +640,11 @@ class VehicleMaintCard extends HTMLElement {
       exactButton.onclick = () => {
         const details = completionDetails(completionInput.value, odometer, attributes.interval_miles, Boolean(attributes.milestone));
         if (!details.valid) { refreshCompletion(); return; }
-        this.call("log_maintenance", { service: this.selectedService, mileage: details.mileage }, `${attributes.service_name} logged at ${formatNumber(details.mileage)} mi`);
+        this.call(
+          "log_maintenance",
+          { service: this.selectedService, mileage: details.mileage, ...filterData },
+          `${attributes.service_name} ${attributes.washable ? filterVerb : "logged"} at ${formatNumber(details.mileage)} mi`,
+        );
       };
     }
 
@@ -646,6 +693,7 @@ class VehicleMaintCard extends HTMLElement {
     const odometer = this.odometer();
     const panel = this.querySelector(".batch-panel");
     const checkboxes = [...this.querySelectorAll("[data-batch-service]")];
+    const filterSelectors = [...this.querySelectorAll("[data-batch-filter-action]")];
     const count = this.querySelector(".batch-count");
     const clearButton = this.querySelector(".clear-batch");
     const currentButton = this.querySelector(".batch-log-current");
@@ -655,6 +703,7 @@ class VehicleMaintCard extends HTMLElement {
     const close = () => {
       this.batchOpen = false;
       this.batchServices.clear();
+      this.batchFilterActions.clear();
       this.batchMileage = "";
       this.error = "";
       this.render();
@@ -680,13 +729,38 @@ class VehicleMaintCard extends HTMLElement {
         : details.valid
           ? `The same ${formatNumber(details.mileage)} mi reading will be applied to every selected item.`
           : details.error;
+      filterSelectors.forEach((select) => {
+        select.disabled = !this.batchServices.has(select.dataset.batchFilterAction);
+      });
     };
     const selectKeys = (keys) => {
       this.batchServices = new Set(keys);
+      const washableKeys = new Set(
+        services
+          .filter((entity) => entity.attributes.washable)
+          .map((entity) => entity.attributes.service_key),
+      );
+      this.batchFilterActions = new Map(
+        [...this.batchServices]
+          .filter((key) => washableKeys.has(key))
+          .map((key) => [key, this.batchFilterActions.get(key) || "wash"]),
+      );
       checkboxes.forEach((checkbox) => {
         checkbox.checked = this.batchServices.has(checkbox.dataset.batchService);
       });
+      filterSelectors.forEach((select) => {
+        select.value = this.batchFilterActions.get(select.dataset.batchFilterAction) || "wash";
+      });
       refresh();
+    };
+    const serviceData = () => {
+      const filterActions = Object.fromEntries(
+        [...this.batchFilterActions].filter(([key]) => this.batchServices.has(key)),
+      );
+      return {
+        services: [...this.batchServices],
+        ...(Object.keys(filterActions).length ? { filter_actions: filterActions } : {}),
+      };
     };
 
     this.querySelector(".batch-close").onclick = close;
@@ -696,9 +770,21 @@ class VehicleMaintCard extends HTMLElement {
     panel.onkeydown = (event) => { if (event.key === "Escape") close(); };
     checkboxes.forEach((checkbox) => {
       checkbox.onchange = () => {
-        if (checkbox.checked) this.batchServices.add(checkbox.dataset.batchService);
-        else this.batchServices.delete(checkbox.dataset.batchService);
+        const key = checkbox.dataset.batchService;
+        const entity = services.find((candidate) => candidate.attributes.service_key === key);
+        if (checkbox.checked) {
+          this.batchServices.add(key);
+          if (entity?.attributes.washable) this.batchFilterActions.set(key, "wash");
+        } else {
+          this.batchServices.delete(key);
+          this.batchFilterActions.delete(key);
+        }
         refresh();
+      };
+    });
+    filterSelectors.forEach((select) => {
+      select.onchange = () => {
+        this.batchFilterActions.set(select.dataset.batchFilterAction, select.value);
       };
     });
     this.querySelector(".select-due").onclick = () => selectKeys(
@@ -713,21 +799,21 @@ class VehicleMaintCard extends HTMLElement {
     };
     currentButton.onclick = () => {
       if (odometer === null || !this.batchServices.size) return;
-      const selected = [...this.batchServices];
+      const data = serviceData();
       this.call(
         "log_maintenance_batch",
-        { services: selected },
-        `${selected.length} maintenance ${selected.length === 1 ? "item" : "items"} logged at ${formatNumber(odometer)} mi`,
+        data,
+        `${data.services.length} maintenance ${data.services.length === 1 ? "item" : "items"} logged at ${formatNumber(odometer)} mi`,
       );
     };
     exactButton.onclick = () => {
       const details = completionMileageDetails(this.batchMileage, odometer);
       if (!details.valid || !this.batchServices.size) { refresh(); return; }
-      const selected = [...this.batchServices];
+      const data = serviceData();
       this.call(
         "log_maintenance_batch",
-        { services: selected, mileage: details.mileage },
-        `${selected.length} maintenance ${selected.length === 1 ? "item" : "items"} logged at ${formatNumber(details.mileage)} mi`,
+        { ...data, mileage: details.mileage },
+        `${data.services.length} maintenance ${data.services.length === 1 ? "item" : "items"} logged at ${formatNumber(details.mileage)} mi`,
       );
     };
   }

@@ -196,6 +196,60 @@ test("batch logging excludes an already completed one-time milestone", () => {
   );
 });
 
+test("service visits are sorted by miles remaining instead of service type", () => {
+  const card = new VehicleMaintCard();
+  card.config = { main_entity: "sensor.vehicle", upcoming_miles: 2000 };
+  card._hass = {
+    states: {
+      "sensor.vehicle": { attributes: { entry_id: "entry-1" } },
+      "sensor.filter": {
+        entity_id: "sensor.filter",
+        attributes: {
+          entry_id: "entry-1",
+          service_key: "cabin_air_filter",
+          service_name: "Cabin Air Filter",
+          initialized: true,
+          miles_remaining: 4000,
+        },
+      },
+      "sensor.oil": {
+        entity_id: "sensor.oil",
+        attributes: {
+          entry_id: "entry-1",
+          service_key: "oil_change",
+          service_name: "Oil Change",
+          initialized: true,
+          miles_remaining: -200,
+        },
+      },
+      "sensor.rotation": {
+        entity_id: "sensor.rotation",
+        attributes: {
+          entry_id: "entry-1",
+          service_key: "tire_rotation",
+          service_name: "Tire Rotation",
+          initialized: true,
+          miles_remaining: 900,
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    card.batchEligibleServices().map((entity) => entity.attributes.service_key),
+    ["oil_change", "tire_rotation", "cabin_air_filter"],
+  );
+});
+
+test("washable filters expose wash and replace actions plus filter-life facts", () => {
+  assert.equal(source.includes("Wash / clean"), true);
+  assert.equal(source.includes("Replace filter"), true);
+  assert.equal(source.includes("filter_action"), true);
+  assert.equal(source.includes("filter_actions"), true);
+  assert.equal(source.includes("Times washed"), true);
+  assert.equal(source.includes("Miles on this filter"), true);
+});
+
 test("maintenance dialog is centered and the editor exposes accent color", () => {
   assert.equal(source.includes("align-items:center"), true);
   assert.equal(source.includes("align-items:flex-end"), false);

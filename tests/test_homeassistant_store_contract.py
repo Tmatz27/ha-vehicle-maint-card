@@ -35,8 +35,10 @@ from custom_components.vehicle_maintenance.const import (
     CONF_INTERVALS,
     CONF_NOTIFY_ENABLED,
     CONF_NOTIFY_SERVICE,
+    CONF_NOTIFY_TARGETS,
     CONF_NOTIFY_THRESHOLD,
     CONF_SERVICES,
+    CONF_WASHABLE_FILTERS,
     DEFAULT_SERVICES,
 )
 from custom_components.vehicle_maintenance.manager import (
@@ -81,13 +83,26 @@ def test_vehicle_and_notification_pickers_filter_expected_entities() -> None:
     assert odometer_selector.config["domain"] == ["sensor"]
     assert odometer_selector.config["device_class"] == ["distance"]
 
-    notification_schema = _notification_schema({})
+    hass = MagicMock()
+    hass.states.async_entity_ids.return_value = ["notify.sm_s926u"]
+    hass.states.get.return_value = SimpleNamespace(
+        attributes={"friendly_name": "Galaxy phone"}
+    )
+    hass.services.async_services.return_value = {
+        "notify": {
+            "send_message": object(),
+            "family_mobile_devices": object(),
+        }
+    }
+    notification_schema = _notification_schema(hass, {})
     notify_selector = next(
         value
         for key, value in notification_schema.schema.items()
-        if key.schema == CONF_NOTIFY_SERVICE
+        if key.schema == CONF_NOTIFY_TARGETS
     )
-    assert notify_selector.config["domain"] == ["notify"]
+    assert notify_selector.config["multiple"] is True
+    values = {option["value"] for option in notify_selector.config["options"]}
+    assert values == {"notify.sm_s926u", "notify.family_mobile_devices"}
 
 
 def test_notification_validation_accepts_entity_and_legacy_action() -> None:
@@ -100,7 +115,7 @@ def test_notification_validation_accepts_entity_and_legacy_action() -> None:
             hass,
             {
                 CONF_NOTIFY_ENABLED: True,
-                CONF_NOTIFY_SERVICE: "notify.sm_s926u",
+                CONF_NOTIFY_TARGETS: ["notify.sm_s926u"],
             },
         )
         == {}
@@ -113,7 +128,7 @@ def test_notification_validation_accepts_entity_and_legacy_action() -> None:
             hass,
             {
                 CONF_NOTIFY_ENABLED: True,
-                CONF_NOTIFY_SERVICE: "notify.mobile_app_old_phone",
+                CONF_NOTIFY_TARGETS: ["notify.mobile_app_old_phone"],
             },
         )
         == {}
@@ -127,7 +142,7 @@ def test_notification_entity_uses_send_message_target(monkeypatch) -> None:
     manager = SimpleNamespace(
         config={
             CONF_NOTIFY_ENABLED: True,
-            CONF_NOTIFY_SERVICE: "notify.sm_s926u",
+            CONF_NOTIFY_TARGETS: ["notify.sm_s926u"],
             CONF_NOTIFY_THRESHOLD: 1500,
             CONF_SERVICES: ["oil_change"],
         },
@@ -146,7 +161,61 @@ def test_notification_entity_uses_send_message_target(monkeypatch) -> None:
         "notify",
         "send_message",
         {"title": "Outback maintenance", "message": "- Oil due"},
-        target={"entity_id": "notify.sm_s926u"},
+        target={"entity_id": ["notify.sm_s926u"]},
+        blocking=False,
+    )
+
+
+def test_notification_supports_multiple_entities_and_a_yaml_group(monkeypatch) -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda target: (
+        SimpleNamespace(state="unknown")
+        if target in {"notify.first_phone", "notify.second_phone"}
+        else None
+    )
+    hass.services.has_service.side_effect = (
+        lambda domain, service: domain == "notify"
+        and service == "family_mobile_devices"
+    )
+    hass.services.async_call = AsyncMock()
+    manager = SimpleNamespace(
+        config={
+            CONF_NOTIFY_ENABLED: True,
+            CONF_NOTIFY_TARGETS: [
+                "notify.first_phone",
+                "notify.second_phone",
+                "notify.family_mobile_devices",
+            ],
+            CONF_NOTIFY_THRESHOLD: 1500,
+            CONF_SERVICES: ["oil_change"],
+        },
+        effective_odometer=45000,
+        records={},
+        entry=SimpleNamespace(title="Outback", entry_id="vehicle-test"),
+    )
+    monkeypatch.setattr(integration, "notification_items", lambda *args: [(0, "Oil")])
+    monkeypatch.setattr(
+        integration, "format_notification_item", lambda item: "- Oil due"
+    )
+
+    asyncio.run(_async_send_notification(hass, manager))
+
+    assert hass.services.async_call.await_count == 2
+    hass.services.async_call.assert_any_await(
+        "notify",
+        "send_message",
+        {"title": "Outback maintenance", "message": "- Oil due"},
+        target={"entity_id": ["notify.first_phone", "notify.second_phone"]},
+        blocking=False,
+    )
+    hass.services.async_call.assert_any_await(
+        "notify",
+        "family_mobile_devices",
+        {
+            "title": "Outback maintenance",
+            "message": "- Oil due",
+            "data": {"tag": "vehicle_maintenance_vehicle-test"},
+        },
         blocking=False,
     )
 
@@ -157,6 +226,7 @@ def test_batch_log_schema_accepts_multiple_services_and_rejects_empty_list() -> 
             ATTR_ENTRY_ID: "vehicle-test",
             "services": ["oil_change", "tire_rotation"],
             "mileage": "44973",
+            "filter_actions": {},
         }
     )
     assert validated["services"] == ["oil_change", "tire_rotation"]
@@ -213,6 +283,40 @@ def test_batch_log_prevalidates_and_saves_the_vehicle_once() -> None:
     invalid_manager.async_save.assert_not_awaited()
 
 
+def test_batch_log_records_washable_filter_actions() -> None:
+    cabin_filter = ServiceRecord(interval_miles=12000)
+    manager = SimpleNamespace(
+        records={"cabin_air_filter": cabin_filter},
+        config={
+            CONF_SERVICES: ["cabin_air_filter"],
+            CONF_WASHABLE_FILTERS: ["cabin_air_filter"],
+        },
+        effective_odometer=44973,
+        async_save=AsyncMock(),
+    )
+
+    asyncio.run(
+        _async_log_maintenance_batch(
+            manager,
+            ["cabin_air_filter"],
+            mileage=40000,
+            filter_actions={"cabin_air_filter": "replace"},
+        )
+    )
+    asyncio.run(
+        _async_log_maintenance_batch(
+            manager,
+            ["cabin_air_filter"],
+            filter_actions={"cabin_air_filter": "wash"},
+        )
+    )
+
+    assert cabin_filter.filter_installed_mileage == 40000
+    assert cabin_filter.last_washed_mileage == 44973
+    assert cabin_filter.wash_count == 1
+    assert manager.async_save.await_count == 2
+
+
 def test_config_entry_migration_updates_only_untouched_defaults() -> None:
     entry = SimpleNamespace(
         version=2,
@@ -243,7 +347,7 @@ def test_config_entry_migration_updates_only_untouched_defaults() -> None:
     hass = SimpleNamespace(config_entries=ConfigEntries())
 
     assert asyncio.run(async_migrate_entry(hass, entry))
-    assert entry.version == 3
+    assert entry.version == 4
     assert entry.data[CONF_INTERVALS] == {
         "coolant": 75000,
         "transmission_fluid": 30000,
@@ -251,3 +355,30 @@ def test_config_entry_migration_updates_only_untouched_defaults() -> None:
         "fuel_filter": 72000,
     }
     assert entry.data[CONF_INITIAL_INTERVALS] == {"coolant": 137500}
+    assert entry.data[CONF_WASHABLE_FILTERS] == []
+
+
+def test_version_three_migration_preserves_notification_target() -> None:
+    entry = SimpleNamespace(
+        version=3,
+        title="Outback",
+        data={
+            CONF_SERVICES: ["oil_change"],
+            CONF_NOTIFY_SERVICE: "notify.family_mobile_devices",
+        },
+        options={},
+    )
+
+    class ConfigEntries:
+        @staticmethod
+        def async_update_entry(target, **changes):
+            for key, value in changes.items():
+                setattr(target, key, value)
+
+    hass = SimpleNamespace(config_entries=ConfigEntries())
+
+    assert asyncio.run(async_migrate_entry(hass, entry))
+    assert entry.version == 4
+    assert entry.data[CONF_NOTIFY_TARGETS] == ["notify.family_mobile_devices"]
+    assert CONF_NOTIFY_SERVICE not in entry.data
+    assert entry.data[CONF_WASHABLE_FILTERS] == []

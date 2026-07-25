@@ -14,6 +14,15 @@ log_maintenance:
       name: Mileage when completed
       required: false
       selector: {number: {min: 1, max: 1000000, mode: box}}
+    filter_action:
+      name: Washable filter action
+      description: For a filter configured as washable, record whether it was washed or replaced.
+      required: false
+      selector:
+        select:
+          options:
+            - {label: Wash or clean, value: wash}
+            - {label: Replace filter, value: replace}
 
 log_maintenance_batch:
   name: Log a service visit
@@ -55,6 +64,11 @@ log_maintenance_batch:
       name: Mileage when completed
       required: false
       selector: {number: {min: 1, max: 1000000, mode: box}}
+    filter_actions:
+      name: Washable filter actions
+      description: Optional mapping of selected washable filter keys to wash or replace. The dashboard card fills this automatically.
+      required: false
+      selector: {object: {}}
 
 snooze_maintenance:
   name: Extend maintenance

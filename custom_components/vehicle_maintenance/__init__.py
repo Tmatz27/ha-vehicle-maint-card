@@ -20,22 +20,28 @@ from .const import (
     CONF_INTERVALS,
     CONF_NOTIFY_ENABLED,
     CONF_NOTIFY_SERVICE,
+    CONF_NOTIFY_TARGETS,
     CONF_NOTIFY_THRESHOLD,
     CONF_NOTIFY_TIME,
     CONF_NOTIFY_WEEKDAY,
     CONF_ODOMETER_ENTITY,
     CONF_SERVICES,
     CONF_VEHICLE_NAME,
+    CONF_WASHABLE_FILTERS,
     DEFAULT_NOTIFICATION_THRESHOLD,
     DEFAULT_NOTIFICATION_TIME,
     DEFAULT_NOTIFICATION_WEEKDAY,
     DOMAIN,
+    FILTER_ACTION_REPLACE,
+    FILTER_ACTIONS,
+    FILTER_SERVICE_KEYS,
     PLATFORMS,
     PREVIOUS_DEFAULT_INTERVALS,
     SERVICE_CATALOG,
 )
 from .manager import VehicleManager
 from .model import (
+    complete_filter_service,
     complete_service,
     complete_service_batch,
     format_notification_item,
@@ -47,7 +53,7 @@ from .model import (
 )
 
 CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.1.4"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=0.2.0"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 BATCH_LOG_SCHEMA = vol.Schema(
@@ -59,6 +65,9 @@ BATCH_LOG_SCHEMA = vol.Schema(
             vol.Length(min=1),
         ),
         vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        vol.Optional("filter_actions", default={}): {
+            vol.In(FILTER_SERVICE_KEYS): vol.In(FILTER_ACTIONS)
+        },
     }
 )
 
@@ -89,16 +98,26 @@ def _record_for(manager: VehicleManager, service: str):
 
 
 async def _async_log_maintenance_batch(
-    manager: VehicleManager, services: list[str], mileage: int | None = None
+    manager: VehicleManager,
+    services: list[str],
+    mileage: int | None = None,
+    filter_actions: dict[str, str] | None = None,
 ) -> None:
     keys = list(dict.fromkeys(services))
+    actions = filter_actions or {}
+    if any(key not in keys for key in actions):
+        raise vol.Invalid("Filter actions must belong to selected maintenance")
+    washable = set(manager.config.get(CONF_WASHABLE_FILTERS, []))
     records = [
         (
             _record_for(manager, key),
             bool(SERVICE_CATALOG[key].get("milestone")),
+            actions.get(key, FILTER_ACTION_REPLACE) if key in washable else None,
         )
         for key in keys
     ]
+    if any(key in actions and key not in washable for key in keys):
+        raise vol.Invalid("Filter actions require a washable filter")
     completion_mileage = manager.effective_odometer if mileage is None else mileage
     if completion_mileage is None:
         raise vol.Invalid("No effective odometer is available")
@@ -127,11 +146,21 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         mileage = call.data.get("mileage", manager.effective_odometer)
         if mileage is None:
             raise vol.Invalid("No effective odometer is available")
-        complete_service(
-            _record_for(manager, key),
-            mileage,
-            milestone=bool(SERVICE_CATALOG[key].get("milestone")),
-        )
+        filter_action = call.data.get("filter_action")
+        if key in manager.config.get(CONF_WASHABLE_FILTERS, []):
+            complete_filter_service(
+                _record_for(manager, key),
+                mileage,
+                action=filter_action or FILTER_ACTION_REPLACE,
+            )
+        else:
+            if filter_action is not None:
+                raise vol.Invalid("Filter actions require a washable filter")
+            complete_service(
+                _record_for(manager, key),
+                mileage,
+                milestone=bool(SERVICE_CATALOG[key].get("milestone")),
+            )
         await manager.async_save()
 
     async def log_maintenance_batch(call: ServiceCall) -> None:
@@ -140,6 +169,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             manager,
             call.data["services"],
             call.data.get("mileage"),
+            call.data.get("filter_actions"),
         )
 
     async def snooze_maintenance(call: ServiceCall) -> None:
@@ -204,6 +234,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             {
                 **common,
                 vol.Optional("mileage"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                vol.Optional("filter_action"): vol.In(FILTER_ACTIONS),
             }
         ),
     )
@@ -300,7 +331,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate config-entry settings separately from per-vehicle stored records."""
-    if entry.version > 3:
+    if entry.version > 4:
         return False
     version = entry.version
     if version == 1:
@@ -340,6 +371,22 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             options=options,
             version=3,
         )
+        version = 3
+    if version == 3:
+        data = dict(entry.data)
+        options = dict(entry.options)
+        for values in (data, options):
+            if CONF_NOTIFY_TARGETS not in values and values.get(CONF_NOTIFY_SERVICE):
+                values[CONF_NOTIFY_TARGETS] = [values[CONF_NOTIFY_SERVICE]]
+            values.pop(CONF_NOTIFY_SERVICE, None)
+            if CONF_SERVICES in values:
+                values.setdefault(CONF_WASHABLE_FILTERS, [])
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options=options,
+            version=4,
+        )
     return True
 
 
@@ -373,8 +420,16 @@ async def _async_send_notification(
     config = manager.config
     if not config.get(CONF_NOTIFY_ENABLED, False) or manager.effective_odometer is None:
         return
-    target = str(config.get(CONF_NOTIFY_SERVICE, "")).strip()
-    if "." not in target:
+    targets = config.get(CONF_NOTIFY_TARGETS)
+    if targets is None:
+        legacy_target = str(config.get(CONF_NOTIFY_SERVICE, "")).strip()
+        targets = [legacy_target] if legacy_target else []
+    elif isinstance(targets, str):
+        targets = [targets]
+    targets = list(
+        dict.fromkeys(str(target).strip() for target in targets if str(target).strip())
+    )
+    if not targets:
         return
     items = notification_items(
         manager.records,
@@ -385,25 +440,34 @@ async def _async_send_notification(
     )
     if not items:
         return
-    domain, service = target.split(".", 1)
     message = "\n".join(format_notification_item(item) for item in items)
     title = f"{manager.entry.title} maintenance"
-    if domain == "notify" and not hass.services.has_service(domain, service):
+    entity_targets = [
+        target
+        for target in targets
+        if target.startswith("notify.") and hass.states.get(target) is not None
+    ]
+    if entity_targets:
         await hass.services.async_call(
             "notify",
             "send_message",
             {"title": title, "message": message},
-            target={"entity_id": target},
+            target={"entity_id": entity_targets},
             blocking=False,
         )
-        return
-    await hass.services.async_call(
-        domain,
-        service,
-        {
-            "title": title,
-            "message": message,
-            "data": {"tag": f"vehicle_maintenance_{manager.entry.entry_id}"},
-        },
-        blocking=False,
-    )
+    for target in targets:
+        if target in entity_targets or "." not in target:
+            continue
+        domain, service = target.split(".", 1)
+        if not hass.services.has_service(domain, service):
+            continue
+        await hass.services.async_call(
+            domain,
+            service,
+            {
+                "title": title,
+                "message": message,
+                "data": {"tag": f"vehicle_maintenance_{manager.entry.entry_id}"},
+            },
+            blocking=False,
+        )

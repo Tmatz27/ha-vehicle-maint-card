@@ -47,6 +47,10 @@ class ServiceRecord:
     milestone_completed: bool = False
     milestone_completed_mileage: int | None = None
     initial_due_mileage_applied: bool = False
+    wash_count: int = 0
+    filter_installed_mileage: int | None = None
+    last_washed_mileage: int | None = None
+    last_filter_action: str | None = None
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> ServiceRecord:
@@ -126,12 +130,39 @@ def complete_service(
         record.last_completed_mileage = mileage
 
 
+def complete_filter_service(
+    record: ServiceRecord, mileage: int, *, action: str
+) -> None:
+    """Record a washable filter cleaning or replacement."""
+    if action not in ("wash", "replace"):
+        raise ValueError("Filter action must be wash or replace")
+    previous_completion = record.last_completed_mileage
+    complete_service(record, mileage)
+    if action == "replace":
+        record.filter_installed_mileage = mileage
+        record.wash_count = 0
+        record.last_washed_mileage = None
+    else:
+        if (
+            record.filter_installed_mileage is None
+            and previous_completion is not None
+            and previous_completion > 0
+        ):
+            record.filter_installed_mileage = previous_completion
+        record.wash_count += 1
+        record.last_washed_mileage = mileage
+    record.last_filter_action = action
+
+
 def complete_service_batch(
-    records: list[tuple[ServiceRecord, bool]], mileage: int
+    records: list[tuple[ServiceRecord, bool, str | None]], mileage: int
 ) -> None:
     """Complete several prevalidated records at one factual odometer reading."""
-    for record, milestone in records:
-        complete_service(record, mileage, milestone=milestone)
+    for record, milestone, filter_action in records:
+        if filter_action is not None:
+            complete_filter_service(record, mileage, action=filter_action)
+        else:
+            complete_service(record, mileage, milestone=milestone)
 
 
 def initialize_service(
@@ -152,6 +183,10 @@ def initialize_service(
         record.last_completed_mileage = 0
         record.due_mileage_override = initial_due_mileage
         record.initial_due_mileage_applied = initial_due_mileage is not None
+        record.wash_count = 0
+        record.filter_installed_mileage = None
+        record.last_washed_mileage = None
+        record.last_filter_action = None
     elif mode == "last_completed":
         if mileage is None:
             raise ValueError("Mileage is required")
@@ -221,6 +256,26 @@ def normalize_selected_records(
             changed = True
         if record.interval_miles != interval:
             record.interval_miles = interval
+            changed = True
+    return changed
+
+
+def normalize_washable_records(
+    records: dict[str, ServiceRecord], washable_services: set[str]
+) -> bool:
+    """Initialize reusable-filter age from an existing replacement record."""
+    changed = False
+    for key in washable_services:
+        record = records.get(key)
+        if record is None:
+            continue
+        if (
+            record.filter_installed_mileage is None
+            and record.last_completed_mileage is not None
+            and record.last_completed_mileage > 0
+        ):
+            record.filter_installed_mileage = record.last_completed_mileage
+            record.last_filter_action = "replace"
             changed = True
     return changed
 

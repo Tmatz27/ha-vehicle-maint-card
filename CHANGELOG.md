@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 - 2026-07-24
+
+- Added separate washable settings for engine and cabin air filters.
+- Added explicit Wash and Replace actions with wash count, installed mileage, and total miles on each reusable filter.
+- Sorted the service-visit checklist by miles remaining instead of maintenance type.
+- Added a direct options menu for vehicle details, tracked services and intervals, and notifications.
+- Added multiple notification recipients, including modern notify entities and legacy YAML notify groups.
+- Preserved existing notification targets and maintenance records through an automatic version-4 migration.
+
 ## 0.1.4 - 2026-07-23
 
 - Replaced the notification action text field with a notify-entity picker.

@@ -30,6 +30,8 @@ def test_modern_subaru_defaults_and_supported_icons() -> None:
 
     assert catalog["oil_change"]["interval"] == 6000
     assert catalog["tire_rotation"]["interval"] == 6000
+    assert catalog["engine_air_filter"]["interval"] == 30000
+    assert catalog["cabin_air_filter"]["interval"] == 12000
     assert catalog["spark_plugs"]["interval"] == 60000
     assert catalog["fuel_filter"]["interval"] == 72000
     assert catalog["coolant"]["initial_interval"] == 137500
@@ -52,6 +54,18 @@ def test_service_selection_uses_a_persistent_multi_select_list() -> None:
         "milestone_services",
     ):
         assert group in source
+
+
+def test_options_menu_exposes_vehicle_services_and_notifications() -> None:
+    source = (ROOT / "custom_components/vehicle_maintenance/config_flow.py").read_text()
+
+    assert 'menu_options=["vehicle", "services", "notifications"]' in source
+    assert "washable_engine_air_filter" in (
+        ROOT / "custom_components/vehicle_maintenance/strings.json"
+    ).read_text()
+    assert "washable_cabin_air_filter" in (
+        ROOT / "custom_components/vehicle_maintenance/strings.json"
+    ).read_text()
 
 
 def test_batch_log_action_is_declared_for_home_assistant_and_the_card() -> None:

@@ -16,6 +16,7 @@ from .const import (
     CONF_INTERVALS,
     CONF_ODOMETER_ENTITY,
     CONF_SERVICES,
+    CONF_WASHABLE_FILTERS,
     DOMAIN,
     SERVICE_CATALOG,
     SIGNAL_UPDATE,
@@ -25,6 +26,7 @@ from .model import (
     accepted_odometer,
     migrate_storage_data,
     normalize_selected_records,
+    normalize_washable_records,
 )
 
 STORAGE_VERSION = 2
@@ -79,12 +81,18 @@ class VehicleManager:
         await self.async_refresh_odometer(save=True)
 
     def _ensure_selected_records(self) -> bool:
-        return normalize_selected_records(
+        changed = normalize_selected_records(
             self.records,
             self.config[CONF_SERVICES],
             self.config.get(CONF_INTERVALS, {}),
             SERVICE_CATALOG,
             self.config.get(CONF_INITIAL_INTERVALS, {}),
+        )
+        return (
+            normalize_washable_records(
+                self.records, set(self.config.get(CONF_WASHABLE_FILTERS, []))
+            )
+            or changed
         )
 
     async def async_start(self) -> None:
