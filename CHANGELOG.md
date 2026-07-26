@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 - 2026-07-25
+
+- Fixed visual-editor dropdowns and selection menus closing during unrelated Home Assistant state updates.
+- Registered the dashboard card as a versioned Lovelace module in storage mode so Home Assistant mobile clients load it reliably.
+- Automatically upgrades the previous card resource URL without creating duplicate dashboard resources.
+- Retained frontend module injection as a compatibility fallback for YAML resource mode.
+
 ## 0.2.0 - 2026-07-24
 
 - Added separate washable settings for engine and cabin air filters.
