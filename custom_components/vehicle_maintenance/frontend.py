@@ -7,7 +7,8 @@ from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN, MODE_STORAGE
+from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
+from homeassistant.components.lovelace.const import MODE_STORAGE
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
