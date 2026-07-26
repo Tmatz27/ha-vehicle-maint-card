@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 - 2026-07-26
+
+- Fixed the visual editor losing focus when Home Assistant repeats `setConfig()` while the card configuration dialog is open.
+- Prevented unchanged config echoes from rebuilding the editor DOM.
+- Deferred genuinely necessary editor rebuilds until the active dropdown, number field, or color control loses focus.
+- Bumped the Lovelace resource version so browsers and Companion App clients do not reuse the cached 0.2.1 bootstrap.
+- Added regression checks for both repeated config updates and focus-safe editor rendering.
+
 ## 0.2.1 - 2026-07-25
 
 - Fixed visual-editor dropdowns and selectors closing during unrelated Home Assistant state updates.
