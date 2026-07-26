@@ -7,7 +7,7 @@ from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.components.lovelace.const import LOVELACE_DATA, MODE_STORAGE
+from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN, MODE_STORAGE
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,13 +24,32 @@ def _base_url(url: str) -> str:
     return url.split("?", 1)[0]
 
 
+def _lovelace_mode_and_resources(hass: HomeAssistant):
+    """Return Lovelace resource mode and collection across supported HA versions."""
+    lovelace = hass.data.get(LOVELACE_DOMAIN)
+    if lovelace is None:
+        return None, None
+
+    # Home Assistant 2024.x used a dictionary. 2025.x migrated Lovelace data to
+    # a dataclass with ``mode``. Newer Home Assistant uses ``resource_mode``.
+    if isinstance(lovelace, dict):
+        mode = lovelace.get("resource_mode", lovelace.get("mode"))
+        resources = lovelace.get("resources")
+    else:
+        mode = getattr(lovelace, "resource_mode", None)
+        if mode is None:
+            mode = getattr(lovelace, "mode", None)
+        resources = getattr(lovelace, "resources", None)
+
+    return mode, resources
+
+
 async def _async_ensure_lovelace_resource(hass: HomeAssistant) -> bool:
     """Create or update the module in Lovelace storage mode."""
-    lovelace = hass.data.get(LOVELACE_DATA)
-    if lovelace is None or lovelace.resource_mode != MODE_STORAGE:
+    mode, resources = _lovelace_mode_and_resources(hass)
+    if mode != MODE_STORAGE or resources is None:
         return False
 
-    resources = lovelace.resources
     await resources.async_get_info()  # Ensure the storage collection is loaded.
 
     for item in resources.async_items() or []:
