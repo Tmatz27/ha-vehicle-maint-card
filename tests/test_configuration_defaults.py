@@ -142,7 +142,19 @@ def test_editor_bootstrap_does_not_rebuild_for_unrelated_hass_updates() -> None:
     assert "vehicleSignature" in bootstrap
     assert 'Object.defineProperty(Editor.prototype, "hass"' in bootstrap
     assert "signature !== this._vehicleSignature" in bootstrap
-    assert "if (shouldRender) this.render();" in bootstrap
+    assert "if (shouldRender) renderWhenIdle.call(this);" in bootstrap
+
+
+def test_editor_bootstrap_ignores_repeated_config_echoes() -> None:
+    bootstrap = (
+        ROOT
+        / "custom_components/vehicle_maintenance/www/vehicle-maint-bootstrap.js"
+    ).read_text()
+
+    assert "editorConfigSignature" in bootstrap
+    assert "Editor.prototype.setConfig = function setConfig(config)" in bootstrap
+    assert "previousSignature !== nextSignature" in bootstrap
+    assert "renderWhenIdle.call(this);" in bootstrap
 
 
 def test_release_and_frontend_cache_versions_stay_aligned() -> None:
