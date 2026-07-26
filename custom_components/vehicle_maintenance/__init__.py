@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 from datetime import time
-from pathlib import Path
 
 import voluptuous as vol
-from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
@@ -39,6 +36,7 @@ from .const import (
     PREVIOUS_DEFAULT_INTERVALS,
     SERVICE_CATALOG,
 )
+from .frontend import async_register_card_frontend
 from .manager import VehicleManager
 from .model import (
     complete_filter_service,
@@ -52,8 +50,6 @@ from .model import (
     validate_snooze_arguments,
 )
 
-CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.2.0"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 BATCH_LOG_SCHEMA = vol.Schema(
@@ -127,11 +123,7 @@ async def _async_log_maintenance_batch(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register frontend and actions exactly once for the integration."""
-    card_path = Path(__file__).parent / "www" / "vehicle-maint-card.js"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_URL, str(card_path), False)]
-    )
-    add_extra_js_url(hass, CARD_RESOURCE_URL)
+    await async_register_card_frontend(hass)
     hass.data.setdefault(DOMAIN, {})
 
     def manager_for(call: ServiceCall) -> VehicleManager:
