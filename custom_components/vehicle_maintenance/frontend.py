@@ -79,7 +79,7 @@ async def async_register_card_frontend(hass: HomeAssistant) -> None:
     try:
         if await _async_ensure_lovelace_resource(hass):
             return
-    except Exception:  # noqa: BLE001 - frontend failure must not break the integration
+    except Exception:
         _LOGGER.exception(
             "Failed to register Vehicle Maintenance as a Lovelace resource; "
             "falling back to Home Assistant frontend module injection"
