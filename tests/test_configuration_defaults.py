@@ -113,15 +113,43 @@ def test_manifest_classifies_each_config_entry_as_a_device() -> None:
     assert manifest["integration_type"] == "device"
 
 
-def test_release_and_frontend_cache_versions_stay_aligned() -> None:
+def test_frontend_card_is_registered_as_a_lovelace_module() -> None:
     component = ROOT / "custom_components/vehicle_maintenance"
     manifest = json.loads((component / "manifest.json").read_text())
     integration_source = (component / "__init__.py").read_text()
-    card_source = (component / "www/vehicle-maint-card.js").read_text()
+    frontend_source = (component / "frontend.py").read_text()
+
+    assert "lovelace" in manifest["dependencies"]
+    assert "async_register_card_frontend" in integration_source
+    assert "LOVELACE_DATA" in frontend_source
+    assert "MODE_STORAGE" in frontend_source
+    assert "async_create_item" in frontend_source
+    assert "async_update_item" in frontend_source
+    assert '"res_type": "module"' in frontend_source
+    assert "LEGACY_CARD_URL" in frontend_source
+
+
+def test_editor_bootstrap_does_not_rebuild_for_unrelated_hass_updates() -> None:
+    bootstrap = (
+        ROOT
+        / "custom_components/vehicle_maintenance/www/vehicle-maint-bootstrap.js"
+    ).read_text()
+
+    assert "vehicleSignature" in bootstrap
+    assert 'Object.defineProperty(Editor.prototype, "hass"' in bootstrap
+    assert "signature !== this._vehicleSignature" in bootstrap
+    assert "if (shouldRender) this.render();" in bootstrap
+
+
+def test_release_and_frontend_cache_versions_stay_aligned() -> None:
+    component = ROOT / "custom_components/vehicle_maintenance"
+    manifest = json.loads((component / "manifest.json").read_text())
+    frontend_source = (component / "frontend.py").read_text()
+    bootstrap_source = (component / "www/vehicle-maint-bootstrap.js").read_text()
 
     version = manifest["version"]
-    assert f'?v={version}"' in integration_source
-    assert f'CARD_VERSION = "{version}"' in card_source
+    assert f'CARD_VERSION = "{version}"' in frontend_source
+    assert f'CARD_VERSION = "{version}"' in bootstrap_source
 
 
 def test_service_actions_never_offer_not_set() -> None:
