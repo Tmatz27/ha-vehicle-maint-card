@@ -2,10 +2,12 @@
 
 ## 0.2.1 - 2026-07-25
 
-- Fixed visual-editor dropdowns and selection menus closing during unrelated Home Assistant state updates.
-- Registered the dashboard card as a versioned Lovelace module in storage mode so Home Assistant mobile clients load it reliably.
-- Automatically upgrades the previous card resource URL without creating duplicate dashboard resources.
-- Retained frontend module injection as a compatibility fallback for YAML resource mode.
+- Fixed visual-editor dropdowns and selectors closing during unrelated Home Assistant state updates.
+- Registered the included dashboard card as a persistent Lovelace module in storage-mode dashboards so desktop and Companion App clients load the same card resource.
+- Added automatic migration from the previous card resource URL without requiring dashboard YAML changes.
+- Kept frontend module injection as a compatibility fallback for YAML resource mode.
+- Added Lovelace resource registration compatibility for supported Home Assistant generations, including 2024.x dictionary data, 2025.x `mode`, and newer `resource_mode` layouts.
+- Added regression checks for editor stability, frontend resource registration, and release/cache version alignment.
 
 ## 0.2.0 - 2026-07-24
 
