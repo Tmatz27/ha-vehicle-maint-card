@@ -8,20 +8,16 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
-import voluptuous as vol  # noqa: E402
+import voluptuous as vol
 
-from custom_components.vehicle_maintenance import (  # noqa: E402
-    _async_log_maintenance_batch,
-)
-from custom_components.vehicle_maintenance.const import CONF_SERVICES  # noqa: E402
-from custom_components.vehicle_maintenance.integrity import (  # noqa: E402
+from custom_components.vehicle_maintenance import _async_log_maintenance_batch
+from custom_components.vehicle_maintenance.const import CONF_SERVICES
+from custom_components.vehicle_maintenance.integrity import (
     complete_service_batch_checked,
     complete_service_checked,
 )
-from custom_components.vehicle_maintenance.model import ServiceRecord  # noqa: E402
-from custom_components.vehicle_maintenance.sensor import (  # noqa: E402
-    VehicleSummarySensor,
-)
+from custom_components.vehicle_maintenance.model import ServiceRecord
+from custom_components.vehicle_maintenance.sensor import VehicleSummarySensor
 
 
 def test_completion_rejects_future_and_backward_history() -> None:
