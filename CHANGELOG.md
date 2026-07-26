@@ -7,7 +7,14 @@
 - Added automatic migration from the previous card resource URL without requiring dashboard YAML changes.
 - Kept frontend module injection as a compatibility fallback for YAML resource mode.
 - Added Lovelace resource registration compatibility for supported Home Assistant generations, including 2024.x dictionary data, 2025.x `mode`, and newer `resource_mode` layouts.
-- Added regression checks for editor stability, frontend resource registration, and release/cache version alignment.
+- Rejected completion mileage above the current odometer and prevented routine maintenance history from being moved backward accidentally.
+- Made service-visit logging validate every selected item before changing any maintenance record.
+- Prevented completed one-time mileage milestones from being logged or extended again until explicitly reset.
+- Removed completed one-time mileage milestones from the dashboard card while retaining their Home Assistant entities and stored completion data.
+- Excluded actively extended maintenance from the summary sensor's `next_service` result.
+- Scoped card/editor CSS and namespaced dialog/input IDs so multiple cards cannot interfere with each other's controls or surrounding dashboard elements.
+- Cached per-vehicle maintenance entity discovery so one card render no longer repeatedly scans every Home Assistant entity.
+- Added regression checks for editor stability, frontend resource registration, completion integrity, atomic batch validation, deferred summary behavior, CSS isolation, and release/cache version alignment.
 
 ## 0.2.0 - 2026-07-24
 
