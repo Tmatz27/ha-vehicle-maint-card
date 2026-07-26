@@ -120,9 +120,10 @@ class VehicleSummarySensor(VehicleEntity):
                 if odometer is None
                 else miles_remaining(record, odometer, milestone=milestone)
             )
-            if remaining is not None:
+            deferred_active = odometer is not None and snooze_active(record, odometer)
+            if remaining is not None and not deferred_active:
                 candidates.append((remaining, definition["name"]))
-            if odometer is not None and snooze_active(record, odometer):
+            if deferred_active:
                 deferred += 1
                 if status in ("overdue", "due_soon"):
                     statuses[-1] = "deferred"

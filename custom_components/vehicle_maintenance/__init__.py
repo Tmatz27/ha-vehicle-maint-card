@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 from datetime import time
-from pathlib import Path
 
 import voluptuous as vol
-from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
@@ -39,11 +36,10 @@ from .const import (
     PREVIOUS_DEFAULT_INTERVALS,
     SERVICE_CATALOG,
 )
+from .frontend import async_register_card_frontend
+from .integrity import complete_service_batch_checked, complete_service_checked
 from .manager import VehicleManager
 from .model import (
-    complete_filter_service,
-    complete_service,
-    complete_service_batch,
     format_notification_item,
     initialize_service,
     notification_items,
@@ -52,8 +48,6 @@ from .model import (
     validate_snooze_arguments,
 )
 
-CARD_URL = "/vehicle-maintenance/vehicle-maint-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=0.2.0"
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 BATCH_LOG_SCHEMA = vol.Schema(
@@ -97,6 +91,19 @@ def _record_for(manager: VehicleManager, service: str):
     return record
 
 
+def _validate_last_completed_not_future(
+    manager: VehicleManager, mode: str, mileage: int | None
+) -> None:
+    """Keep explicit history corrections from creating future completions."""
+    if mode != "last_completed" or mileage is None:
+        return
+    odometer = manager.effective_odometer
+    if odometer is not None and mileage > odometer:
+        raise vol.Invalid(
+            "Completion mileage cannot be greater than the current odometer"
+        )
+
+
 async def _async_log_maintenance_batch(
     manager: VehicleManager,
     services: list[str],
@@ -121,17 +128,20 @@ async def _async_log_maintenance_batch(
     completion_mileage = manager.effective_odometer if mileage is None else mileage
     if completion_mileage is None:
         raise vol.Invalid("No effective odometer is available")
-    complete_service_batch(records, completion_mileage)
+    try:
+        complete_service_batch_checked(
+            records,
+            completion_mileage,
+            manager.effective_odometer,
+        )
+    except ValueError as error:
+        raise vol.Invalid(str(error)) from error
     await manager.async_save()
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register frontend and actions exactly once for the integration."""
-    card_path = Path(__file__).parent / "www" / "vehicle-maint-card.js"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_URL, str(card_path), False)]
-    )
-    add_extra_js_url(hass, CARD_RESOURCE_URL)
+    await async_register_card_frontend(hass)
     hass.data.setdefault(DOMAIN, {})
 
     def manager_for(call: ServiceCall) -> VehicleManager:
@@ -146,21 +156,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         mileage = call.data.get("mileage", manager.effective_odometer)
         if mileage is None:
             raise vol.Invalid("No effective odometer is available")
+        record = _record_for(manager, key)
+        milestone = bool(SERVICE_CATALOG[key].get("milestone"))
         filter_action = call.data.get("filter_action")
         if key in manager.config.get(CONF_WASHABLE_FILTERS, []):
-            complete_filter_service(
-                _record_for(manager, key),
+            filter_action = filter_action or FILTER_ACTION_REPLACE
+        elif filter_action is not None:
+            raise vol.Invalid("Filter actions require a washable filter")
+        try:
+            complete_service_checked(
+                record,
                 mileage,
-                action=filter_action or FILTER_ACTION_REPLACE,
+                manager.effective_odometer,
+                milestone=milestone,
+                filter_action=filter_action,
             )
-        else:
-            if filter_action is not None:
-                raise vol.Invalid("Filter actions require a washable filter")
-            complete_service(
-                _record_for(manager, key),
-                mileage,
-                milestone=bool(SERVICE_CATALOG[key].get("milestone")),
-            )
+        except ValueError as error:
+            raise vol.Invalid(str(error)) from error
         await manager.async_save()
 
     async def log_maintenance_batch(call: ServiceCall) -> None:
@@ -176,8 +188,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         manager = manager_for(call)
         if manager.effective_odometer is None:
             raise vol.Invalid("No effective odometer is available")
+        key = call.data["service"]
+        record = _record_for(manager, key)
+        if SERVICE_CATALOG[key].get("milestone") and record.milestone_completed:
+            raise vol.Invalid("Completed mileage milestones cannot be extended")
         snooze_service(
-            _record_for(manager, call.data["service"]),
+            record,
             manager.effective_odometer,
             miles=call.data.get("miles"),
             until_mileage=call.data.get("until_mileage"),
@@ -194,6 +210,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         key = call.data["service"]
         initial_due = manager.config.get(CONF_INITIAL_INTERVALS, {}).get(
             key, SERVICE_CATALOG[key].get("initial_interval")
+        )
+        _validate_last_completed_not_future(
+            manager, call.data["mode"], call.data.get("mileage")
         )
         initialize_service(
             _record_for(manager, key),
