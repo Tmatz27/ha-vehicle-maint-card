@@ -121,8 +121,12 @@ def test_frontend_card_is_registered_as_a_lovelace_module() -> None:
 
     assert "lovelace" in manifest["dependencies"]
     assert "async_register_card_frontend" in integration_source
-    assert "LOVELACE_DATA" in frontend_source
+    assert "LOVELACE_DOMAIN" in frontend_source
+    assert "LOVELACE_DATA" not in frontend_source
     assert "MODE_STORAGE" in frontend_source
+    assert 'isinstance(lovelace, dict)' in frontend_source
+    assert 'getattr(lovelace, "mode", None)' in frontend_source
+    assert 'getattr(lovelace, "resource_mode", None)' in frontend_source
     assert "async_create_item" in frontend_source
     assert "async_update_item" in frontend_source
     assert '"res_type": "module"' in frontend_source
