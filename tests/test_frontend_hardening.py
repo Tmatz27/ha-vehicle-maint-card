@@ -35,4 +35,18 @@ def test_card_controls_receive_instance_unique_ids() -> None:
 def test_editor_avoids_unrelated_hass_rerenders() -> None:
     assert "vehicleSignature" in BOOTSTRAP
     assert "signature !== this._vehicleSignature" in BOOTSTRAP
-    assert "if (shouldRender) this.render();" in BOOTSTRAP
+    assert "if (shouldRender) renderWhenIdle.call(this);" in BOOTSTRAP
+
+
+def test_editor_avoids_repeated_set_config_rerenders() -> None:
+    assert "normalizeEditorConfig" in BOOTSTRAP
+    assert "editorConfigSignature" in BOOTSTRAP
+    assert "Editor.prototype.setConfig = function setConfig(config)" in BOOTSTRAP
+    assert "previousSignature !== nextSignature" in BOOTSTRAP
+
+
+def test_editor_defers_required_render_while_control_has_focus() -> None:
+    assert "installFocusGuard" in BOOTSTRAP
+    assert "this.contains(document.activeElement)" in BOOTSTRAP
+    assert "this.__vehicleMaintRenderPending = true" in BOOTSTRAP
+    assert "queueMicrotask" in BOOTSTRAP
