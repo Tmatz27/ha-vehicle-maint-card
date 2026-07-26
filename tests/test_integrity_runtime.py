@@ -1,5 +1,6 @@
 """Regression tests for maintenance data integrity and summary behavior."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -7,16 +8,20 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
-import voluptuous as vol
+import voluptuous as vol  # noqa: E402
 
-from custom_components.vehicle_maintenance import _async_log_maintenance_batch
-from custom_components.vehicle_maintenance.const import CONF_SERVICES
-from custom_components.vehicle_maintenance.integrity import (
+from custom_components.vehicle_maintenance import (  # noqa: E402
+    _async_log_maintenance_batch,
+)
+from custom_components.vehicle_maintenance.const import CONF_SERVICES  # noqa: E402
+from custom_components.vehicle_maintenance.integrity import (  # noqa: E402
     complete_service_batch_checked,
     complete_service_checked,
 )
-from custom_components.vehicle_maintenance.model import ServiceRecord
-from custom_components.vehicle_maintenance.sensor import VehicleSummarySensor
+from custom_components.vehicle_maintenance.model import ServiceRecord  # noqa: E402
+from custom_components.vehicle_maintenance.sensor import (  # noqa: E402
+    VehicleSummarySensor,
+)
 
 
 def test_completion_rejects_future_and_backward_history() -> None:
@@ -72,8 +77,6 @@ def test_batch_service_rejects_future_mileage_before_saving() -> None:
     )
 
     with pytest.raises(vol.Invalid, match="current odometer"):
-        import asyncio
-
         asyncio.run(
             _async_log_maintenance_batch(
                 manager,
