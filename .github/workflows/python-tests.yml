@@ -20,14 +20,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install pytest ruff pyyaml
       - run: pytest -q
-      - name: Run Ruff
-        run: ruff check custom_components tests scripts 2>&1 | tee ruff-output.txt
-      - name: Upload Ruff diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruff-${{ matrix.python-version }}
-          path: ruff-output.txt
+      - run: ruff check custom_components tests scripts
       - run: python -m compileall -q custom_components
       - run: python scripts/validate_files.py
   home-assistant-store-contract:
