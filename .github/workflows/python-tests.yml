@@ -31,4 +31,4 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install pytest homeassistant
-      - run: pytest -q tests/test_homeassistant_store_contract.py
+      - run: pytest -q

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add a vehicle",
-        "description": "Name the vehicle and choose the mileage sensor that Home Assistant should trust.",
+        "description": "Name the vehicle and choose the mileage sensor that Home Assistant should trust. The sensor must report miles. If your vehicle reports kilometres, create a miles conversion template sensor first and select that one here.",
         "data": {
           "vehicle_name": "Vehicle display name",
           "odometer_entity": "Vehicle odometer sensor"
@@ -60,7 +60,8 @@
           "notify_targets": "Notification recipients and groups",
           "notify_threshold": "Notification threshold (miles)",
           "notify_weekday": "Notification day",
-          "notify_time": "Notification time"
+          "notify_time": "Notification time",
+          "notify_muted_services": "Leave out of notifications"
         }
       }
     },
@@ -80,15 +81,24 @@
         "menu_options": {
           "vehicle": "Vehicle and odometer",
           "services": "Tracked services and intervals",
-          "notifications": "Notifications"
+          "notifications": "Notifications",
+          "car_wash": "Car wash tracking"
         }
       },
       "vehicle": {
         "title": "Vehicle and odometer",
-        "description": "Update the vehicle name or odometer source.",
+        "description": "Update the vehicle name or odometer source. The sensor must report miles. If your vehicle reports kilometres, create a miles conversion template sensor first and select that one here.",
         "data": {
           "vehicle_name": "Vehicle display name",
           "odometer_entity": "Vehicle odometer sensor"
+        }
+      },
+      "car_wash": {
+        "title": "Car wash tracking",
+        "description": "Optionally track when {vehicle} was last washed. Washes are tracked by date, not mileage, and never count as mechanical maintenance.",
+        "data": {
+          "car_wash_enabled": "Track car washes",
+          "car_wash_interval_days": "Remind after this many days"
         }
       },
       "services": {
@@ -142,7 +152,8 @@
           "notify_targets": "Notification recipients and groups",
           "notify_threshold": "Notification threshold (miles)",
           "notify_weekday": "Notification day",
-          "notify_time": "Notification time"
+          "notify_time": "Notification time",
+          "notify_muted_services": "Leave out of notifications"
         }
       }
     },

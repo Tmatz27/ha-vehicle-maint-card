@@ -10,9 +10,12 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, UnitOfLength
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_CAR_WASH_ENABLED,
+    CONF_CAR_WASH_INTERVAL_DAYS,
     CONF_INITIAL_INTERVALS,
     CONF_INTERVALS,
     CONF_NOTIFY_ENABLED,
+    CONF_NOTIFY_MUTED_SERVICES,
     CONF_NOTIFY_SERVICE,
     CONF_NOTIFY_TARGETS,
     CONF_NOTIFY_THRESHOLD,
@@ -22,6 +25,7 @@ from .const import (
     CONF_SERVICES,
     CONF_VEHICLE_NAME,
     CONF_WASHABLE_FILTERS,
+    DEFAULT_CAR_WASH_INTERVAL_DAYS,
     DEFAULT_NOTIFICATION_THRESHOLD,
     DEFAULT_NOTIFICATION_TIME,
     DEFAULT_NOTIFICATION_WEEKDAY,
@@ -29,6 +33,7 @@ from .const import (
     DOMAIN,
     FILTER_SERVICE_KEYS,
     SERVICE_CATALOG,
+    WEEKDAY_OPTIONS,
 )
 
 SERVICE_GROUPS = {
@@ -159,60 +164,100 @@ def _notification_options(hass, defaults: dict) -> list[selector.SelectOptionDic
     ]
 
 
-def _notification_schema(hass, defaults: dict) -> vol.Schema:
-    weekdays = [
-        ("mon", "Monday"),
-        ("tue", "Tuesday"),
-        ("wed", "Wednesday"),
-        ("thu", "Thursday"),
-        ("fri", "Friday"),
-        ("sat", "Saturday"),
-        ("sun", "Sunday"),
-    ]
+def _notification_schema(
+    hass, defaults: dict, selected_services: list[str] | None = None
+) -> vol.Schema:
+    fields = {
+        vol.Required(
+            CONF_NOTIFY_ENABLED,
+            default=defaults.get(CONF_NOTIFY_ENABLED, False),
+        ): selector.BooleanSelector(),
+        vol.Optional(
+            CONF_NOTIFY_TARGETS,
+            default=_configured_notification_targets(defaults),
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=_notification_options(hass, defaults),
+                multiple=True,
+                mode=selector.SelectSelectorMode.LIST,
+            )
+        ),
+        vol.Optional(
+            CONF_NOTIFY_THRESHOLD,
+            default=defaults.get(CONF_NOTIFY_THRESHOLD, DEFAULT_NOTIFICATION_THRESHOLD),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=10000,
+                step=100,
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+        vol.Required(
+            CONF_NOTIFY_WEEKDAY,
+            default=defaults.get(CONF_NOTIFY_WEEKDAY, DEFAULT_NOTIFICATION_WEEKDAY),
+        ): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(value=value, label=label)
+                    for value, label in WEEKDAY_OPTIONS
+                ]
+            )
+        ),
+        vol.Required(
+            CONF_NOTIFY_TIME,
+            default=defaults.get(CONF_NOTIFY_TIME, DEFAULT_NOTIFICATION_TIME),
+        ): selector.TimeSelector(),
+    }
+
+    # Muting is per service and never changes the maintenance record itself, so
+    # an item stays visible on the card while staying out of the weekly summary.
+    tracked = [key for key in (selected_services or []) if key in SERVICE_CATALOG]
+    if tracked:
+        muted = [
+            key
+            for key in defaults.get(CONF_NOTIFY_MUTED_SERVICES, []) or []
+            if key in tracked
+        ]
+        fields[
+            vol.Optional(CONF_NOTIFY_MUTED_SERVICES, default=muted)
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(
+                        value=key, label=SERVICE_CATALOG[key]["name"]
+                    )
+                    for key in tracked
+                ],
+                multiple=True,
+                mode=selector.SelectSelectorMode.LIST,
+            )
+        )
+    return vol.Schema(fields)
+
+
+def _car_wash_schema(defaults: dict) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(
-                CONF_NOTIFY_ENABLED,
-                default=defaults.get(CONF_NOTIFY_ENABLED, False),
+                CONF_CAR_WASH_ENABLED,
+                default=bool(defaults.get(CONF_CAR_WASH_ENABLED, False)),
             ): selector.BooleanSelector(),
-            vol.Optional(
-                CONF_NOTIFY_TARGETS,
-                default=_configured_notification_targets(defaults),
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=_notification_options(hass, defaults),
-                    multiple=True,
-                    mode=selector.SelectSelectorMode.LIST,
-                )
-            ),
-            vol.Optional(
-                CONF_NOTIFY_THRESHOLD,
-                default=defaults.get(
-                    CONF_NOTIFY_THRESHOLD, DEFAULT_NOTIFICATION_THRESHOLD
+            vol.Required(
+                CONF_CAR_WASH_INTERVAL_DAYS,
+                default=int(
+                    defaults.get(
+                        CONF_CAR_WASH_INTERVAL_DAYS, DEFAULT_CAR_WASH_INTERVAL_DAYS
+                    )
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=0,
-                    max=10000,
-                    step=100,
+                    min=1,
+                    max=365,
+                    step=1,
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
-            vol.Required(
-                CONF_NOTIFY_WEEKDAY,
-                default=defaults.get(CONF_NOTIFY_WEEKDAY, DEFAULT_NOTIFICATION_WEEKDAY),
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[
-                        selector.SelectOptionDict(value=value, label=label)
-                        for value, label in weekdays
-                    ]
-                )
-            ),
-            vol.Required(
-                CONF_NOTIFY_TIME,
-                default=defaults.get(CONF_NOTIFY_TIME, DEFAULT_NOTIFICATION_TIME),
-            ): selector.TimeSelector(),
         }
     )
 
@@ -393,12 +438,13 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_notifications(self, user_input=None):
+        selected = self._pending.get(CONF_SERVICES, [])
         if user_input is not None:
             errors = _notification_errors(self.hass, user_input)
             if errors:
                 return self.async_show_form(
                     step_id="notifications",
-                    data_schema=_notification_schema(self.hass, user_input),
+                    data_schema=_notification_schema(self.hass, user_input, selected),
                     errors=errors,
                     description_placeholders={
                         "vehicle": self._pending[CONF_VEHICLE_NAME]
@@ -412,7 +458,7 @@ class VehicleMaintenanceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(title=title, data=self._pending)
         return self.async_show_form(
             step_id="notifications",
-            data_schema=_notification_schema(self.hass, {}),
+            data_schema=_notification_schema(self.hass, {}, selected),
             description_placeholders={"vehicle": self._pending[CONF_VEHICLE_NAME]},
         )
 
@@ -431,7 +477,7 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
         self._current = {**self._entry.data, **self._entry.options}
         return self.async_show_menu(
             step_id="init",
-            menu_options=["vehicle", "services", "notifications"],
+            menu_options=["vehicle", "services", "notifications", "car_wash"],
         )
 
     def _save_options(self, changes: dict):
@@ -515,6 +561,13 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
                     CONF_WASHABLE_FILTERS: [
                         key for key in FILTER_SERVICE_KEYS if key in washable
                     ],
+                    # Drop mutes for services the user just stopped tracking so a
+                    # later re-enable does not silently stay out of notifications.
+                    CONF_NOTIFY_MUTED_SERVICES: [
+                        key
+                        for key in self._current.get(CONF_NOTIFY_MUTED_SERVICES, [])
+                        if key in self._pending[CONF_SERVICES]
+                    ],
                 }
             )
         return self.async_show_form(
@@ -529,20 +582,35 @@ class VehicleMaintenanceOptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_notifications(self, user_input=None):
+        selected = self._current.get(CONF_SERVICES, [])
         if user_input is not None:
             errors = _notification_errors(self.hass, user_input)
             if errors:
                 return self.async_show_form(
                     step_id="notifications",
-                    data_schema=_notification_schema(self.hass, user_input),
+                    data_schema=_notification_schema(self.hass, user_input, selected),
                     errors=errors,
                     description_placeholders={"vehicle": self._entry.title},
                 )
             values = dict(user_input)
             values[CONF_NOTIFY_TIME] = _normalize_time(values[CONF_NOTIFY_TIME])
+            values.setdefault(CONF_NOTIFY_MUTED_SERVICES, [])
             return self._save_options(values)
         return self.async_show_form(
             step_id="notifications",
-            data_schema=_notification_schema(self.hass, self._current),
+            data_schema=_notification_schema(self.hass, self._current, selected),
+            description_placeholders={"vehicle": self._entry.title},
+        )
+
+    async def async_step_car_wash(self, user_input=None):
+        if user_input is not None:
+            values = dict(user_input)
+            values[CONF_CAR_WASH_INTERVAL_DAYS] = int(
+                values[CONF_CAR_WASH_INTERVAL_DAYS]
+            )
+            return self._save_options(values)
+        return self.async_show_form(
+            step_id="car_wash",
+            data_schema=_car_wash_schema(self._current),
             description_placeholders={"vehicle": self._entry.title},
         )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 STATUS_SETUP_REQUIRED = "setup_required"
@@ -10,6 +11,10 @@ STATUS_OVERDUE = "overdue"
 STATUS_DUE_SOON = "due_soon"
 STATUS_OKAY = "okay"
 STATUS_COMPLETED = "completed"
+STATUS_NEVER_WASHED = "never_washed"
+
+# A wash is flagged as approaching this many days before its interval elapses.
+CAR_WASH_DUE_SOON_DAYS = 3
 
 
 def validate_snooze_arguments(*, miles: int | None, until_mileage: int | None) -> None:
@@ -59,6 +64,110 @@ class ServiceRecord:
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(slots=True)
+class CarWashRecord:
+    """Date-based wash history.
+
+    Washing is deliberately kept apart from the mechanical catalog: elapsed time
+    and road conditions drive it far more than any fixed mileage interval, and a
+    wash must never look like a completed maintenance service.
+    """
+
+    last_washed_date: str | None = None
+    wash_count: int = 0
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> CarWashRecord:
+        fields = cls.__dataclass_fields__
+        return cls(**{key: value[key] for key in fields if key in value})
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def parse_iso_date(value: str | date | None) -> date | None:
+    """Return a date from stored ISO text without raising on bad data."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def days_since_wash(record: CarWashRecord, today: date) -> int | None:
+    """Return whole days since the last wash, or None when never washed."""
+    washed = parse_iso_date(record.last_washed_date)
+    return None if washed is None else (today - washed).days
+
+
+def car_wash_days_remaining(
+    record: CarWashRecord, today: date, interval_days: int
+) -> int | None:
+    elapsed = days_since_wash(record, today)
+    return None if elapsed is None else interval_days - elapsed
+
+
+def car_wash_status(
+    record: CarWashRecord,
+    today: date,
+    interval_days: int,
+    *,
+    due_soon_days: int = CAR_WASH_DUE_SOON_DAYS,
+) -> str:
+    remaining = car_wash_days_remaining(record, today, interval_days)
+    if remaining is None:
+        return STATUS_NEVER_WASHED
+    if remaining < 0:
+        return STATUS_OVERDUE
+    if remaining <= due_soon_days:
+        return STATUS_DUE_SOON
+    return STATUS_OKAY
+
+
+def log_car_wash(record: CarWashRecord, when: date) -> None:
+    """Record a wash on a factual date, refusing to backdate before the last one."""
+    previous = parse_iso_date(record.last_washed_date)
+    if previous is not None and when < previous:
+        raise ValueError("Wash date cannot be earlier than the last recorded wash")
+    record.last_washed_date = when.isoformat()
+    record.wash_count += 1
+
+
+def reset_car_wash(record: CarWashRecord) -> None:
+    record.last_washed_date = None
+    record.wash_count = 0
+
+
+def parse_clock_time(value: str | time) -> time:
+    """Return a time from stored ``HH:MM`` or ``HH:MM:SS`` configuration text."""
+    if isinstance(value, time):
+        return value
+    parts = [int(part) for part in str(value).split(":")]
+    return time(parts[0], parts[1], parts[2] if len(parts) > 2 else 0)
+
+
+def next_notification_time(
+    now: datetime, weekday_index: int, at_time: time
+) -> datetime:
+    """Return the next datetime matching a weekly weekday/time schedule."""
+    candidate = now.replace(
+        hour=at_time.hour,
+        minute=at_time.minute,
+        second=at_time.second,
+        microsecond=0,
+    )
+    ahead = (weekday_index - candidate.weekday()) % 7
+    candidate += timedelta(days=ahead)
+    if candidate <= now:
+        candidate += timedelta(days=7)
+    return candidate
 
 
 def scheduled_due_mileage(
@@ -361,11 +470,14 @@ def notification_items(
     odometer: int,
     threshold: int,
     selected_services: set[str] | None = None,
+    muted_services: set[str] | None = None,
 ) -> list[tuple[int, str]]:
     """Return unsnoozed, initialized notification items sorted by urgency."""
     result: list[tuple[int, str]] = []
     for key, record in records.items():
         if selected_services is not None and key not in selected_services:
+            continue
+        if muted_services and key in muted_services:
             continue
         definition = catalog.get(key, {})
         milestone = bool(definition.get("milestone"))

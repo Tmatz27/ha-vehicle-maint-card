@@ -1,7 +1,7 @@
 """Constants and built-in catalog for Vehicle Maintenance."""
 
 DOMAIN = "vehicle_maintenance"
-PLATFORMS = ["sensor", "binary_sensor"]
+PLATFORMS = ["sensor", "binary_sensor", "button"]
 CONF_VEHICLE_NAME = "vehicle_name"
 CONF_ODOMETER_ENTITY = "odometer_entity"
 CONF_SERVICES = "services"
@@ -14,6 +14,9 @@ CONF_NOTIFY_TARGETS = "notify_targets"
 CONF_NOTIFY_THRESHOLD = "notify_threshold"
 CONF_NOTIFY_WEEKDAY = "notify_weekday"
 CONF_NOTIFY_TIME = "notify_time"
+CONF_NOTIFY_MUTED_SERVICES = "notify_muted_services"
+CONF_CAR_WASH_ENABLED = "car_wash_enabled"
+CONF_CAR_WASH_INTERVAL_DAYS = "car_wash_interval_days"
 ATTR_ENTRY_ID = "entry_id"
 ATTR_SERVICE_KEY = "service_key"
 SIGNAL_UPDATE = f"{DOMAIN}_update"
@@ -25,6 +28,24 @@ FILTER_SERVICE_KEYS = ("engine_air_filter", "cabin_air_filter")
 FILTER_ACTION_WASH = "wash"
 FILTER_ACTION_REPLACE = "replace"
 FILTER_ACTIONS = (FILTER_ACTION_WASH, FILTER_ACTION_REPLACE)
+
+# Car washes are tracked separately from mechanical maintenance because elapsed
+# time and driving conditions matter far more than a fixed mileage interval.
+DEFAULT_CAR_WASH_INTERVAL_DAYS = 14
+CAR_WASH_KEY = "car_wash"
+
+WEEKDAY_OPTIONS = (
+    ("mon", "Monday"),
+    ("tue", "Tuesday"),
+    ("wed", "Wednesday"),
+    ("thu", "Thursday"),
+    ("fri", "Friday"),
+    ("sat", "Saturday"),
+    ("sun", "Sunday"),
+)
+
+# Matches datetime.weekday(): Monday is 0 through Sunday is 6.
+WEEKDAY_INDEX = {key: index for index, (key, _label) in enumerate(WEEKDAY_OPTIONS)}
 
 # Defaults follow the normal-use schedule for recent U.S.-market Subaru vehicles
 # where Subaru publishes a mileage interval. Condition-based reminders are marked

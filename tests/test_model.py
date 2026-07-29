@@ -2,7 +2,13 @@
 
 import importlib.util
 import sys
+from datetime import date as _date
+from datetime import datetime as _datetime
+from datetime import time as _time
+from datetime import timezone as _timezone
 from pathlib import Path
+
+_utc = _timezone.utc
 
 MODULE = Path(__file__).parents[1] / "custom_components/vehicle_maintenance/model.py"
 spec = importlib.util.spec_from_file_location("vehicle_maintenance_model", MODULE)
@@ -335,3 +341,107 @@ def test_legacy_not_set_action_maps_to_never_performed():
     assert record.last_completed_mileage == 0
     assert record.due_mileage_override is None
     assert record.snoozed_until_mileage is None
+
+
+def test_car_wash_is_tracked_by_date_and_never_fabricates_a_wash():
+    record = model.CarWashRecord()
+
+    assert record.last_washed_date is None
+    assert record.wash_count == 0
+    assert model.days_since_wash(record, _date(2026, 7, 29)) is None
+    assert model.car_wash_status(record, _date(2026, 7, 29), 14) == "never_washed"
+
+    model.log_car_wash(record, _date(2026, 7, 20))
+
+    assert record.last_washed_date == "2026-07-20"
+    assert record.wash_count == 1
+    assert model.days_since_wash(record, _date(2026, 7, 29)) == 9
+    assert model.car_wash_days_remaining(record, _date(2026, 7, 29), 14) == 5
+
+
+def test_car_wash_status_tracks_elapsed_days_against_the_interval():
+    record = model.CarWashRecord(last_washed_date="2026-07-01")
+
+    assert model.car_wash_status(record, _date(2026, 7, 5), 14) == "okay"
+    assert model.car_wash_status(record, _date(2026, 7, 12), 14) == "due_soon"
+    assert model.car_wash_status(record, _date(2026, 7, 15), 14) == "due_soon"
+    assert model.car_wash_status(record, _date(2026, 7, 16), 14) == "overdue"
+
+
+def test_car_wash_refuses_to_backdate_before_the_last_recorded_wash():
+    record = model.CarWashRecord(last_washed_date="2026-07-20", wash_count=3)
+
+    try:
+        model.log_car_wash(record, _date(2026, 7, 10))
+    except ValueError as error:
+        assert "earlier than the last recorded wash" in str(error)
+    else:  # pragma: no cover - guards against a silently accepted backdate
+        raise AssertionError("expected a backdated wash to be rejected")
+
+    assert record.last_washed_date == "2026-07-20"
+    assert record.wash_count == 3
+
+
+def test_car_wash_reset_clears_history():
+    record = model.CarWashRecord(last_washed_date="2026-07-20", wash_count=4)
+
+    model.reset_car_wash(record)
+
+    assert record.last_washed_date is None
+    assert record.wash_count == 0
+
+
+def test_unreadable_stored_wash_dates_never_raise():
+    assert model.parse_iso_date(None) is None
+    assert model.parse_iso_date("") is None
+    assert model.parse_iso_date("not-a-date") is None
+    assert model.parse_iso_date("2026-13-45") is None
+    assert model.parse_iso_date("2026-07-20") == _date(2026, 7, 20)
+    assert model.parse_iso_date(_date(2026, 7, 20)) == _date(2026, 7, 20)
+
+
+def test_muted_services_are_left_out_of_notifications_but_keep_their_record():
+    records = {
+        "oil_change": ServiceRecord(True, 40000, 6000),
+        "tire_replacement": ServiceRecord(True, 0, 50000),
+    }
+    catalog = {
+        "oil_change": {"name": "Oil Change", "interval": 6000},
+        "tire_replacement": {"name": "Tire Replacement", "interval": 50000},
+    }
+
+    # At 49,000 mi both items are inside the 2,000 mi threshold, so anything that
+    # drops out of the summary dropped out because of muting and nothing else.
+    unmuted = model.notification_items(records, catalog, 49000, 2000)
+    assert [name for _miles, name in unmuted] == ["Oil Change", "Tire Replacement"]
+
+    muted = model.notification_items(
+        records, catalog, 49000, 2000, None, {"tire_replacement"}
+    )
+    assert [name for _miles, name in muted] == ["Oil Change"]
+
+    # Muting is a notification preference only; the record is untouched.
+    assert records["tire_replacement"].last_completed_mileage == 0
+    assert records["tire_replacement"].interval_miles == 50000
+
+
+def test_next_scheduled_summary_lands_on_the_configured_weekday_and_time():
+    # Home Assistant always passes an aware datetime, so mirror that here.
+    def _dt(*args):
+        return _datetime(*args, tzinfo=_utc)
+
+    # Wednesday 2026-07-29 at 09:00.
+    now = _dt(2026, 7, 29, 9, 0)
+
+    # Sunday (index 6) at 17:00 is later the same week.
+    assert model.next_notification_time(now, 6, _time(17, 0)) == _dt(2026, 8, 2, 17, 0)
+    # Wednesday 17:00 is still ahead of 09:00 today.
+    assert model.next_notification_time(now, 2, _time(17, 0)) == _dt(2026, 7, 29, 17, 0)
+    # Wednesday 08:00 already passed, so it rolls a full week forward.
+    assert model.next_notification_time(now, 2, _time(8, 0)) == _dt(2026, 8, 5, 8, 0)
+
+
+def test_clock_times_parse_with_and_without_seconds():
+    assert model.parse_clock_time("17:00:00") == _time(17, 0, 0)
+    assert model.parse_clock_time("07:30") == _time(7, 30, 0)
+    assert model.parse_clock_time(_time(6, 15)) == _time(6, 15)
