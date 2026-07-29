@@ -131,3 +131,26 @@ set_effective_odometer:
       name: Allow decrease
       default: false
       selector: {boolean: {}}
+
+send_test_notification:
+  name: Send test notification
+  description: Send the maintenance summary immediately to the configured recipients to confirm routing. Sends even when nothing is currently due.
+  fields:
+    entry_id: *entry
+
+log_car_wash:
+  name: Log car wash
+  description: Record that the vehicle was washed. Car washes are tracked by date and never count as mechanical maintenance.
+  fields:
+    entry_id: *entry
+    date:
+      name: Wash date
+      description: Defaults to today. Use an earlier date if the wash was not logged at the time.
+      required: false
+      selector: {date: {}}
+
+reset_car_wash:
+  name: Reset car wash history
+  description: Clear the wash date and wash count for this vehicle.
+  fields:
+    entry_id: *entry

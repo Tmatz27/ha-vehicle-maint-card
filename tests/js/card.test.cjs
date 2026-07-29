@@ -13,12 +13,15 @@ const source = fs.readFileSync(cardPath, "utf8");
 const {
   VehicleMaintCard,
   accentTextColor,
+  carWashPresentation,
   completionDetails,
   completionMileageDetails,
+  csvCell,
   extensionDetails,
   finiteNumber,
   isDueSoonService,
   isNeverPerformed,
+  maintenanceCsv,
   normalizeConfig,
   normalizeAccentColor,
   positiveNumber,
@@ -94,11 +97,23 @@ test("extension target is always current odometer plus extension", () => {
   assert.deepEqual(extensionDetails(44973, 1000), {
     valid: true,
     error: "",
+    warning: "",
     miles: 1000,
     target: 45973,
   });
   assert.equal(extensionDetails(null, 1000).valid, false);
   assert.equal(extensionDetails(44973, "").valid, false);
+});
+
+test("an implausibly long extension warns without blocking a deliberate choice", () => {
+  const typo = extensionDetails(44973, 100000);
+  assert.equal(typo.valid, true);
+  assert.equal(typo.target, 144973);
+  assert.match(typo.warning, /very long extension/);
+
+  // The threshold itself must stay quiet so normal deferrals are never nagged.
+  assert.equal(extensionDetails(44973, 20000).warning, "");
+  assert.equal(extensionDetails(44973, 2000).warning, "");
 });
 
 test("Due Soon excludes unlogged, completed, unavailable, and extended services", () => {
@@ -269,6 +284,105 @@ test("maintenance dialog is centered and the editor exposes accent color", () =>
 test("maintenance dialog includes a concise why it matters BLUF", () => {
   assert.equal(source.includes("Why it matters"), true);
   assert.equal(source.includes("attributes.why_it_matters"), true);
+});
+
+test("csv cells escape quotes, commas, and newlines", () => {
+  assert.equal(csvCell("Oil Change"), "Oil Change");
+  assert.equal(csvCell(null), "");
+  assert.equal(csvCell(undefined), "");
+  assert.equal(csvCell(0), "0");
+  assert.equal(csvCell("30,000 mi Service"), '"30,000 mi Service"');
+  assert.equal(csvCell('He said "hi"'), '"He said ""hi"""');
+  assert.equal(csvCell("line\nbreak"), '"line\nbreak"');
+});
+
+test("csv export snapshots current maintenance state without inventing history", () => {
+  const services = [
+    {
+      attributes: {
+        service_name: "Oil Change",
+        status: "due_soon",
+        last_completed_mileage: 40882,
+        interval_miles: 6000,
+        scheduled_due_mileage: 46882,
+        miles_remaining: 1788,
+        snoozed_until_mileage: null,
+        washable: false,
+      },
+    },
+    {
+      attributes: {
+        service_name: "Cabin Air Filter",
+        status: "okay",
+        last_completed_mileage: 37733,
+        interval_miles: 12000,
+        scheduled_due_mileage: 49733,
+        miles_remaining: 4639,
+        snoozed_until_mileage: null,
+        washable: true,
+        wash_count: 2,
+        filter_installed_mileage: 37733,
+      },
+    },
+  ];
+  const csv = maintenanceCsv(services, "Outback", 45094);
+  const lines = csv.split("\n");
+
+  assert.equal(lines.length, 3);
+  assert.match(lines[0], /^Vehicle,Odometer \(mi\),Service,Status,/);
+  assert.equal(lines[1], "Outback,45094,Oil Change,due_soon,40882,6000,46882,1788,,,");
+  assert.equal(
+    lines[2],
+    "Outback,45094,Cabin Air Filter,okay,37733,12000,49733,4639,,2,37733",
+  );
+});
+
+test("csv export stays valid when the odometer is unavailable", () => {
+  const csv = maintenanceCsv(
+    [{ attributes: { service_name: "Oil Change", status: "unavailable", washable: false } }],
+    "Forester",
+    null,
+  );
+  assert.equal(csv.split("\n")[1], "Forester,,Oil Change,unavailable,,,,,,,");
+});
+
+test("car wash presentation is date based and never claims a wash that did not happen", () => {
+  const entity = (attributes) => ({ attributes });
+
+  assert.deepEqual(carWashPresentation(entity({ days_since_wash: null, days_remaining: null })), {
+    kind: "never",
+    detail: "Never washed",
+    badge: "NEVER",
+  });
+
+  const overdue = carWashPresentation(entity({ days_since_wash: 20, days_remaining: -6 }));
+  assert.equal(overdue.kind, "overdue");
+  assert.equal(overdue.detail, "Washed 20 days ago");
+  assert.equal(overdue.badge, "6 days over");
+
+  assert.equal(carWashPresentation(entity({ days_since_wash: 14, days_remaining: 0 })).kind, "due");
+  assert.equal(carWashPresentation(entity({ days_since_wash: 12, days_remaining: 2 })).kind, "due");
+  assert.equal(carWashPresentation(entity({ days_since_wash: 3, days_remaining: 11 })).kind, "okay");
+
+  // Singular day wording matters because this tile is read at a glance.
+  assert.equal(carWashPresentation(entity({ days_since_wash: 1, days_remaining: 13 })).detail, "Washed 1 day ago");
+  assert.equal(carWashPresentation(entity({ days_since_wash: 13, days_remaining: 1 })).badge, "1 day left");
+});
+
+test("a service visit pauses on a confirmation recap before writing records", () => {
+  assert.equal(source.includes("batchConfirmPanel"), true);
+  assert.equal(source.includes("batch-confirm-yes"), true);
+  assert.equal(source.includes("batch-confirm-back"), true);
+  // Both entry points must route through the recap rather than logging directly.
+  assert.equal(source.includes("this.batchConfirm = { mileage: odometer, useCurrentOdometer: true }"), true);
+  assert.equal(source.includes("this.batchConfirm = { mileage: details.mileage, useCurrentOdometer: false }"), true);
+});
+
+test("card exposes car wash and export affordances", () => {
+  assert.equal(source.includes("carWashSection"), true);
+  assert.equal(source.includes('"log_car_wash"'), true);
+  assert.equal(source.includes("export-csv"), true);
+  assert.equal(source.includes("Export CSV"), true);
 });
 
 test("unrelated state changes do not trigger a card rebuild", () => {

@@ -1,10 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-07-29
+
+### Fixed
 
 - Fixed the card's accent-color header tint (the `.hero` background gradient) failing to render on themes that only define `--card-background-color`, which is the default for nearly every Home Assistant theme. `color-mix()` now falls back correctly instead of silently dropping the whole background declaration.
 - Corrected the bundled card's internal version banner, which still logged `v0.2.0` in the browser console after the 0.2.1 and 0.2.2 releases.
 - Wired the Home Assistant Store/runtime-contract CI job to run the full test suite instead of a single file, so `tests/test_integrity_runtime.py` (batch-logging atomicity and summary-sensor regression checks) actually executes in CI.
+
+### Added
+
+- Added a confirmation recap to service visits. Both the current-odometer and exact-mileage paths now list every selected item and the mileage that will be applied before any record is written.
+- Added a non-blocking warning when a custom extension is longer than 20,000 miles, so a mistyped extension is caught without preventing a deliberate long deferral.
+- Added optional car wash tracking, disabled by default and configured under **Configure > Car wash tracking**. Washes are tracked by date rather than mileage and are deliberately kept out of the mechanical service catalog, Due Soon, and maintenance notifications. Adds a `car_wash` sensor, a `Log car wash` button, a **Car Care** card section, and the `log_car_wash` and `reset_car_wash` actions.
+- Added per-service notification muting. A muted service stays fully visible on the card but is left out of the weekly summary, and its mute clears automatically if the service is deselected.
+- Added a `Send test notification` button and matching `send_test_notification` action that deliver immediately even when nothing is due, so notification routing can be confirmed without waiting for the weekly summary.
+- Added notification delivery diagnostics to the maintenance summary sensor, including the next scheduled summary and the status, time, recipients, item count, and any error from the most recent attempt.
+- Added a CSV export of the vehicle's current maintenance state for resale, warranty, or personal records. This remains a current-state snapshot, not a lifetime repair-history database.
+
+### Changed
+
+- Clarified in setup and options that the odometer sensor must report miles, and that a miles conversion template sensor is needed first if the vehicle reports kilometres.
+- Bumped the Lovelace resource version so browsers and Companion App clients load the new card instead of a cached 0.2.2 bundle.
+
+### Notes
+
+- Stored maintenance records, vehicle entries, intervals, extensions, and dashboard configurations are unchanged. The new wash and notification-diagnostic keys are optional additions to existing storage, so no data migration is required and no config-entry version bump was needed.
 
 ## 0.2.2 - 2026-07-26
 

@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.2.2";
+const CARD_VERSION = "0.3.0";
 const DOMAIN = "vehicle_maintenance";
 const DEFAULT_UPCOMING_MILES = 2000;
 const DEFAULT_EXTEND_MILES = 1000;

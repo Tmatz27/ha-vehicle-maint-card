@@ -22,11 +22,14 @@ from .const import (
     SIGNAL_UPDATE,
 )
 from .model import (
+    CarWashRecord,
     ServiceRecord,
     accepted_odometer,
+    log_car_wash,
     migrate_storage_data,
     normalize_selected_records,
     normalize_washable_records,
+    reset_car_wash,
 )
 
 STORAGE_VERSION = 2
@@ -53,6 +56,8 @@ class VehicleManager:
     records: dict[str, ServiceRecord] = field(default_factory=dict)
     cached_odometer: int | None = None
     odometer_source: str = "unavailable"
+    car_wash: CarWashRecord = field(default_factory=CarWashRecord)
+    last_notification: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         self.store = VehicleMaintenanceStore(
@@ -75,6 +80,10 @@ class VehicleManager:
             key: ServiceRecord.from_dict(value)
             for key, value in stored.get("services", {}).items()
         }
+        # Both keys are optional so a store written by an earlier release loads
+        # unchanged and no maintenance data needs migrating.
+        self.car_wash = CarWashRecord.from_dict(stored.get("car_wash", {}) or {})
+        self.last_notification = stored.get("last_notification")
         records_changed = self._ensure_selected_records()
         if records_changed:
             await self.async_save()
@@ -151,6 +160,20 @@ class VehicleManager:
         self.odometer_source = "manual"
         await self.async_save()
 
+    async def async_log_car_wash(self, when) -> None:
+        """Record a factual wash date without touching mechanical maintenance."""
+        log_car_wash(self.car_wash, when)
+        await self.async_save()
+
+    async def async_reset_car_wash(self) -> None:
+        reset_car_wash(self.car_wash)
+        await self.async_save()
+
+    async def async_record_notification(self, result: dict[str, Any]) -> None:
+        """Persist the outcome of the most recent summary delivery attempt."""
+        self.last_notification = result
+        await self.async_save()
+
     async def async_save(self) -> None:
         await self.store.async_save(
             {
@@ -158,6 +181,8 @@ class VehicleManager:
                 "services": {
                     key: record.as_dict() for key, record in self.records.items()
                 },
+                "car_wash": self.car_wash.as_dict(),
+                "last_notification": self.last_notification,
             }
         )
         self.async_update_listeners()

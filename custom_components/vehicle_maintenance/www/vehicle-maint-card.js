@@ -1,8 +1,11 @@
-const CARD_VERSION = "0.2.2";
+const CARD_VERSION = "0.3.0";
 const DOMAIN = "vehicle_maintenance";
 const DEFAULT_UPCOMING_MILES = 2000;
 const DEFAULT_EXTEND_MILES = 1000;
 const QUICK_EXTENSIONS = [500, 1000, 2000];
+// Extensions beyond this are legal but almost always a typo, so the card warns
+// without blocking a deliberate long deferral.
+const EXTENSION_WARNING_MILES = 20000;
 
 const esc = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -93,9 +96,68 @@ const completionDetails = (value, odometer, interval, milestone = false) => {
 const extensionDetails = (odometer, amount) => {
   const current = finiteNumber(odometer);
   const miles = positiveNumber(amount);
-  if (current === null) return { valid: false, error: "A valid odometer is required.", miles, target: null };
-  if (miles === null) return { valid: false, error: "Enter a positive extension distance.", miles: null, target: null };
-  return { valid: true, error: "", miles, target: current + miles };
+  if (current === null) return { valid: false, error: "A valid odometer is required.", warning: "", miles, target: null };
+  if (miles === null) return { valid: false, error: "Enter a positive extension distance.", warning: "", miles: null, target: null };
+  const warning = miles > EXTENSION_WARNING_MILES
+    ? `${formatNumber(miles)} mi is a very long extension. Check the number before continuing.`
+    : "";
+  return { valid: true, error: "", warning, miles, target: current + miles };
+};
+
+const csvCell = (value) => {
+  const text = value === null || value === undefined ? "" : String(value);
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+};
+
+// A read-only snapshot for resale, warranty, or personal records. This is a
+// current-state export, not the lifetime service database the card avoids being.
+const maintenanceCsv = (services, vehicleName, odometer) => {
+  const header = [
+    "Vehicle",
+    "Odometer (mi)",
+    "Service",
+    "Status",
+    "Last completed (mi)",
+    "Interval (mi)",
+    "Next due (mi)",
+    "Miles remaining",
+    "Extended until (mi)",
+    "Times washed",
+    "Filter installed (mi)",
+  ];
+  const rows = services.map((entity) => {
+    const attributes = entity.attributes || {};
+    const washable = Boolean(attributes.washable);
+    return [
+      vehicleName,
+      odometer === null || odometer === undefined ? "" : odometer,
+      attributes.service_name,
+      attributes.status,
+      attributes.last_completed_mileage,
+      attributes.interval_miles,
+      attributes.scheduled_due_mileage,
+      attributes.miles_remaining,
+      attributes.snoozed_until_mileage,
+      washable ? attributes.wash_count : "",
+      washable ? attributes.filter_installed_mileage : "",
+    ];
+  });
+  return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+};
+
+const carWashPresentation = (entity) => {
+  const attributes = entity?.attributes || {};
+  const since = finiteNumber(attributes.days_since_wash);
+  const remaining = finiteNumber(attributes.days_remaining);
+  const dayLabel = (value) => `${formatNumber(value)} ${Math.abs(value) === 1 ? "day" : "days"}`;
+  if (since === null) {
+    return { kind: "never", detail: "Never washed", badge: "NEVER" };
+  }
+  const detail = `Washed ${dayLabel(since)} ago`;
+  if (remaining === null) return { kind: "okay", detail, badge: dayLabel(since) };
+  if (remaining < 0) return { kind: "overdue", detail, badge: `${dayLabel(Math.abs(remaining))} over` };
+  if (remaining === 0) return { kind: "due", detail, badge: "DUE" };
+  return { kind: remaining <= 3 ? "due" : "okay", detail, badge: `${dayLabel(remaining)} left` };
 };
 
 const isDueSoonService = (entity, upcomingMiles) => {
@@ -176,7 +238,9 @@ class VehicleMaintCard extends HTMLElement {
     this.batchServices = new Set();
     this.batchFilterActions = new Map();
     this.batchMileage = "";
+    this.batchConfirm = null;
     this.serviceEntityIds = [];
+    this.carWashEntityId = null;
     this.error = "";
   }
 
@@ -243,10 +307,37 @@ class VehicleMaintCard extends HTMLElement {
     return this.services().find((entity) => entity.attributes.service_key === this.selectedService);
   }
 
+  carWashEntity() {
+    const entryId = this.entryId();
+    if (!entryId || !this._hass) return null;
+    const entity = Object.values(this._hass.states).find(
+      (candidate) => candidate.attributes.entry_id === entryId && candidate.attributes.car_wash === true,
+    ) || null;
+    this.carWashEntityId = entity ? entity.entity_id : null;
+    return entity;
+  }
+
   relevantStatesChanged(previous, next) {
     const mainEntity = this.config?.main_entity;
     if (!mainEntity || previous.states[mainEntity] !== next.states[mainEntity]) return true;
+    if (this.carWashEntityId && previous.states[this.carWashEntityId] !== next.states[this.carWashEntityId]) return true;
     return this.serviceEntityIds.some((entityId) => previous.states[entityId] !== next.states[entityId]);
+  }
+
+  exportCsv() {
+    const main = this.main();
+    const vehicleName = String(main?.attributes.vehicle_name || main?.attributes.friendly_name || "Vehicle");
+    const csv = maintenanceCsv(this.services(), vehicleName, this.odometer());
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${vehicleName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-maintenance.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    this.showToast("Maintenance CSV downloaded");
   }
 
   showToast(message) {
@@ -271,6 +362,7 @@ class VehicleMaintCard extends HTMLElement {
       this.error = "";
       this.selectedService = null;
       this.batchOpen = false;
+      this.batchConfirm = null;
       this.batchServices.clear();
       this.batchFilterActions.clear();
       this.batchMileage = "";
@@ -301,6 +393,7 @@ class VehicleMaintCard extends HTMLElement {
     this.batchServices = new Set();
     this.batchFilterActions = new Map();
     this.batchMileage = "";
+    this.batchConfirm = null;
     this.error = "";
     this.render();
   }
@@ -399,6 +492,7 @@ class VehicleMaintCard extends HTMLElement {
         <input id="custom-extension" class="custom-extension" type="number" inputmode="numeric" min="1" step="1" placeholder="Enter miles" value="${esc(this.customExtension)}">
       </div>
       <div class="inline-message extension-result ${!details.valid ? "invalid" : ""}">${esc(targetText)}</div>
+      <div class="inline-message extension-warning caution" ${details.warning ? "" : "hidden"}>${esc(details.warning)}</div>
       <button class="primary extend-action" ${details.valid ? "" : "disabled"}>${esc(actionText)}</button>
       <small>This postpones dashboard attention and notifications. It does not log the service as completed or change its normal interval.</small>
       ${attributes.deferred ? `<button class="text clear-extension">Clear Extension</button>` : ""}
@@ -446,8 +540,30 @@ class VehicleMaintCard extends HTMLElement {
     </section></div>`;
   }
 
+  batchConfirmPanel() {
+    const mileage = this.batchConfirm.mileage;
+    const selected = this.batchEligibleServices()
+      .filter((entity) => this.batchServices.has(entity.attributes.service_key));
+    const items = selected.map((entity) => {
+      const attributes = entity.attributes;
+      const action = attributes.washable
+        ? this.batchFilterActions.get(attributes.service_key) === "replace" ? " — replaced" : " — washed"
+        : "";
+      return `<li><ha-icon icon="${esc(attributes.icon || "mdi:wrench-outline")}"></ha-icon><span>${esc(attributes.service_name)}${esc(action)}</span></li>`;
+    }).join("");
+    return `<div class="backdrop batch-backdrop"><section class="panel batch-panel" role="dialog" aria-modal="true" aria-labelledby="batch-confirm-title" tabindex="-1">
+      <header><div><small>Confirm service visit</small><h2 id="batch-confirm-title">Log ${selected.length} ${selected.length === 1 ? "item" : "items"}?</h2></div><button class="close batch-close" aria-label="Close service visit">×</button></header>
+      ${this.error ? `<div class="error">${esc(this.error)}</div>` : ""}
+      <div class="notice"><b>All at ${formatNumber(mileage)} mi</b><span>This records a factual completion for every item below and clears any active extension on them.</span></div>
+      <ul class="confirm-list">${items}</ul>
+      <button class="primary batch-confirm-yes">Confirm and log at ${formatNumber(mileage)} mi</button>
+      <button class="text batch-confirm-back">Back</button>
+    </section></div>`;
+  }
+
   batchPanel() {
     if (!this.batchOpen) return "";
+    if (this.batchConfirm) return this.batchConfirmPanel();
     const odometer = this.odometer();
     const services = this.batchEligibleServices();
     const selectedCount = this.batchServices.size;
@@ -498,6 +614,27 @@ class VehicleMaintCard extends HTMLElement {
         <small>Each recurring item keeps its own interval. Any active extension on a logged item is cleared.</small>
       </div>
     </section></div>`;
+  }
+
+  carWashSection() {
+    const entity = this.carWashEntity();
+    if (!entity) return "";
+    const attributes = entity.attributes;
+    const display = carWashPresentation(entity);
+    const interval = finiteNumber(attributes.interval_days);
+    const detail = interval === null
+      ? display.detail
+      : `${display.detail} · every ${formatNumber(interval)} days`;
+    return `<h3 class="section-title">Car Care</h3>
+      <div class="row wash-row ${esc(display.kind)}">
+        <div class="row-main">
+          <span class="service-icon"><ha-icon icon="mdi:car-wash"></ha-icon></span>
+          <span class="row-copy"><b>Car Wash</b><small>${esc(detail)}</small></span>
+          <span class="row-value">${esc(display.badge)}</span>
+        </div>
+        <button class="wash-log" type="button">Log Wash</button>
+        <button class="info" data-info="${esc(entity.entity_id)}" aria-label="Open car wash entity information"><ha-icon icon="mdi:information-outline"></ha-icon></button>
+      </div>`;
   }
 
   render() {
@@ -552,6 +689,10 @@ class VehicleMaintCard extends HTMLElement {
       .filter-action{margin-bottom:18px;padding:12px;border-radius:13px;background:var(--secondary-background-color)}.filter-action-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}.filter-action>small{display:block;margin-top:8px;color:var(--secondary-text-color);font-size:.82rem;line-height:1.35}
       .batch-intro{margin:0 0 12px;color:var(--secondary-text-color)}.batch-tools{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:8px;margin:12px 0 5px}.text-button{min-height:38px;padding:6px 10px;border:0;border-radius:10px;background:color-mix(in srgb,var(--vm-accent) 12%,transparent);color:var(--vm-accent);font-weight:700}.batch-count{text-align:right;font-size:.84rem}.batch-sort-note{display:block;margin:0 0 8px;color:var(--secondary-text-color)}.batch-list{max-height:38vh;overflow:auto;overscroll-behavior:contain;border:1px solid var(--divider-color);border-radius:14px}.batch-item{display:flex;align-items:center;gap:10px;min-height:58px;padding:7px 11px;border-top:1px solid var(--divider-color)}.batch-item:first-child{border-top:0}.batch-item>input{width:22px;height:22px;flex:0 0 22px;accent-color:var(--vm-accent)}.batch-item-copy{display:flex;align-items:center;gap:10px;min-width:0;flex:1}.batch-item .service-icon{width:36px;height:36px;flex-basis:36px}.batch-filter-action{min-height:38px;max-width:98px;padding:0 7px;border:1px solid var(--divider-color);border-radius:9px;background:var(--secondary-background-color);color:var(--primary-text-color)}.batch-log-actions{padding-top:15px}.batch-log-actions h3{margin:0 0 8px;font-size:1rem}.batch-log-actions>label{display:block;margin:12px 0 6px;color:var(--secondary-text-color);font-size:.85rem}.batch-log-actions>input{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--secondary-background-color);color:var(--primary-text-color)}.batch-log-actions>small{display:block;margin-top:8px;color:var(--secondary-text-color)}
       .notice{display:flex;flex-direction:column;gap:5px;padding:14px;border-radius:13px;background:var(--secondary-background-color)}.notice span{color:var(--secondary-text-color)}.error{padding:11px;border-radius:11px;background:color-mix(in srgb,var(--error-color) 18%,transparent);color:var(--error-color)}[hidden]{display:none!important}
+      .inline-message.caution{color:var(--warning-color,#ff9800)}
+      .wash-row .row-main{cursor:default}.wash-log{flex:0 0 auto;align-self:center;min-height:38px;margin-right:4px;padding:0 12px;border:1px solid color-mix(in srgb,var(--vm-accent) 45%,var(--divider-color));border-radius:11px;background:color-mix(in srgb,var(--vm-accent) 10%,transparent);color:var(--vm-accent);font-weight:700}
+      .card-footer{display:flex;justify-content:flex-end;padding:12px 18px 16px;border-top:1px solid var(--divider-color)}.export-csv{display:flex;align-items:center;gap:7px;min-height:40px;padding:0 13px;border:0;border-radius:11px;background:transparent;color:var(--secondary-text-color);font-weight:700}.export-csv:hover{background:var(--secondary-background-color)}
+      .confirm-list{margin:14px 0 4px;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}.confirm-list li{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;background:var(--secondary-background-color)}.confirm-list ha-icon{flex:0 0 auto;color:var(--vm-accent)}
       @media(max-width:430px){.hero{padding:18px}.panel{padding:17px}.extension-choices{grid-template-columns:1fr 1fr}.facts{grid-template-columns:1fr 1fr}.row-value{max-width:80px}.chips{padding-inline:14px}.batch-tools{grid-template-columns:1fr 1fr}.batch-count{grid-column:1/-1;text-align:left}}
     </style>
     <ha-card>
@@ -561,6 +702,8 @@ class VehicleMaintCard extends HTMLElement {
       <div class="card-actions"><button class="batch-open" type="button"><ha-icon icon="mdi:clipboard-check-outline"></ha-icon>Log a Service Visit</button></div>
       <h3 class="section-title">${this.view === "due" ? "Needs Attention" : "All Maintenance"}</h3>
       ${this.serviceRows(shown)}
+      ${this.carWashSection()}
+      <div class="card-footer"><button class="export-csv" type="button"><ha-icon icon="mdi:download-outline"></ha-icon>Export CSV</button></div>
     </ha-card>${this.actionPanel()}${this.batchPanel()}`;
 
     this.querySelectorAll("[data-view]").forEach((button) => {
@@ -573,6 +716,10 @@ class VehicleMaintCard extends HTMLElement {
       button.onclick = () => this.moreInfo(button.dataset.info);
     });
     this.querySelector(".batch-open")?.addEventListener("click", () => this.openBatch());
+    this.querySelector(".export-csv")?.addEventListener("click", () => this.exportCsv());
+    this.querySelector(".wash-log")?.addEventListener("click", () => {
+      this.call("log_car_wash", {}, "Car wash logged for today");
+    });
     this.bindPanel();
     this.bindBatchPanel();
   }
@@ -660,6 +807,7 @@ class VehicleMaintCard extends HTMLElement {
     const customInput = this.querySelector(".custom-extension");
     const extendButton = this.querySelector(".extend-action");
     const extensionResult = this.querySelector(".extension-result");
+    const extensionWarning = this.querySelector(".extension-warning");
     const refreshExtension = () => {
       this.customExtension = customInput.value;
       const details = extensionDetails(odometer, customInput.value);
@@ -667,6 +815,10 @@ class VehicleMaintCard extends HTMLElement {
       extendButton.textContent = details.valid ? `Extend until ${formatNumber(details.target)} mi` : "Extension unavailable";
       extensionResult.classList.toggle("invalid", !details.valid);
       extensionResult.textContent = details.valid ? `This maintenance will return at ${formatNumber(details.target)} mi.` : details.error;
+      if (extensionWarning) {
+        extensionWarning.textContent = details.warning;
+        extensionWarning.hidden = !details.warning;
+      }
     };
     if (customInput && extendButton) customInput.oninput = refreshExtension;
 
@@ -692,6 +844,47 @@ class VehicleMaintCard extends HTMLElement {
     const services = this.batchEligibleServices();
     const odometer = this.odometer();
     const panel = this.querySelector(".batch-panel");
+
+    if (this.batchConfirm) {
+      const closeConfirm = () => {
+        this.batchOpen = false;
+        this.batchConfirm = null;
+        this.batchServices.clear();
+        this.batchFilterActions.clear();
+        this.batchMileage = "";
+        this.error = "";
+        this.render();
+      };
+      this.querySelector(".batch-close").onclick = closeConfirm;
+      this.querySelector(".batch-backdrop").onclick = (event) => {
+        if (event.target === event.currentTarget) closeConfirm();
+      };
+      panel.onkeydown = (event) => { if (event.key === "Escape") closeConfirm(); };
+      this.querySelector(".batch-confirm-back").onclick = () => {
+        this.batchConfirm = null;
+        this.error = "";
+        this.render();
+      };
+      this.querySelector(".batch-confirm-yes").onclick = () => {
+        const { mileage, useCurrentOdometer } = this.batchConfirm;
+        const filterActions = Object.fromEntries(
+          [...this.batchFilterActions].filter(([key]) => this.batchServices.has(key)),
+        );
+        const data = {
+          services: [...this.batchServices],
+          ...(Object.keys(filterActions).length ? { filter_actions: filterActions } : {}),
+          ...(useCurrentOdometer ? {} : { mileage }),
+        };
+        this.batchConfirm = null;
+        this.call(
+          "log_maintenance_batch",
+          data,
+          `${data.services.length} maintenance ${data.services.length === 1 ? "item" : "items"} logged at ${formatNumber(mileage)} mi`,
+        );
+      };
+      return;
+    }
+
     const checkboxes = [...this.querySelectorAll("[data-batch-service]")];
     const filterSelectors = [...this.querySelectorAll("[data-batch-filter-action]")];
     const count = this.querySelector(".batch-count");
@@ -702,6 +895,7 @@ class VehicleMaintCard extends HTMLElement {
     const mileageResult = this.querySelector(".batch-mileage-result");
     const close = () => {
       this.batchOpen = false;
+      this.batchConfirm = null;
       this.batchServices.clear();
       this.batchFilterActions.clear();
       this.batchMileage = "";
@@ -753,16 +947,6 @@ class VehicleMaintCard extends HTMLElement {
       });
       refresh();
     };
-    const serviceData = () => {
-      const filterActions = Object.fromEntries(
-        [...this.batchFilterActions].filter(([key]) => this.batchServices.has(key)),
-      );
-      return {
-        services: [...this.batchServices],
-        ...(Object.keys(filterActions).length ? { filter_actions: filterActions } : {}),
-      };
-    };
-
     this.querySelector(".batch-close").onclick = close;
     this.querySelector(".batch-backdrop").onclick = (event) => {
       if (event.target === event.currentTarget) close();
@@ -797,24 +981,18 @@ class VehicleMaintCard extends HTMLElement {
       this.batchMileage = mileageInput.value;
       refresh();
     };
+    // A service visit changes several records at once, so both paths pause on a
+    // recap of exactly what will be written before anything is saved.
     currentButton.onclick = () => {
       if (odometer === null || !this.batchServices.size) return;
-      const data = serviceData();
-      this.call(
-        "log_maintenance_batch",
-        data,
-        `${data.services.length} maintenance ${data.services.length === 1 ? "item" : "items"} logged at ${formatNumber(odometer)} mi`,
-      );
+      this.batchConfirm = { mileage: odometer, useCurrentOdometer: true };
+      this.render();
     };
     exactButton.onclick = () => {
       const details = completionMileageDetails(this.batchMileage, odometer);
       if (!details.valid || !this.batchServices.size) { refresh(); return; }
-      const data = serviceData();
-      this.call(
-        "log_maintenance_batch",
-        { ...data, mileage: details.mileage },
-        `${data.services.length} maintenance ${data.services.length === 1 ? "item" : "items"} logged at ${formatNumber(details.mileage)} mi`,
-      );
+      this.batchConfirm = { mileage: details.mileage, useCurrentOdometer: false };
+      this.render();
     };
   }
 }
@@ -889,12 +1067,15 @@ if (typeof module !== "undefined") {
   module.exports = {
     VehicleMaintCard,
     accentTextColor,
+    carWashPresentation,
     completionDetails,
     completionMileageDetails,
+    csvCell,
     extensionDetails,
     finiteNumber,
     isDueSoonService,
     isNeverPerformed,
+    maintenanceCsv,
     normalizeConfig,
     normalizeAccentColor,
     positiveNumber,

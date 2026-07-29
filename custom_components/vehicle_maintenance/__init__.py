@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import time
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
@@ -10,12 +11,14 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ENTRY_ID,
     CONF_INITIAL_INTERVALS,
     CONF_INTERVALS,
     CONF_NOTIFY_ENABLED,
+    CONF_NOTIFY_MUTED_SERVICES,
     CONF_NOTIFY_SERVICE,
     CONF_NOTIFY_TARGETS,
     CONF_NOTIFY_THRESHOLD,
@@ -35,6 +38,7 @@ from .const import (
     PLATFORMS,
     PREVIOUS_DEFAULT_INTERVALS,
     SERVICE_CATALOG,
+    WEEKDAY_INDEX,
 )
 from .frontend import async_register_card_frontend
 from .integrity import complete_service_batch_checked, complete_service_checked
@@ -43,12 +47,13 @@ from .model import (
     format_notification_item,
     initialize_service,
     notification_items,
+    parse_clock_time,
     snooze_service,
     validate_setup_arguments,
     validate_snooze_arguments,
 )
 
-WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+WEEKDAYS = WEEKDAY_INDEX
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 BATCH_LOG_SCHEMA = vol.Schema(
     {
@@ -241,6 +246,31 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             call.data["mileage"], allow_decrease=call.data["allow_decrease"]
         )
 
+    async def send_test_notification(call: ServiceCall) -> None:
+        manager = manager_for(call)
+        result = await _async_run_notification(hass, manager, test=True)
+        if result["status"] == "error":
+            raise vol.Invalid(f"Test notification failed: {result['error']}")
+        if result["status"] == "skipped_no_targets":
+            raise vol.Invalid(
+                "No notification recipients are configured for this vehicle"
+            )
+        if result["status"] == "skipped_no_odometer":
+            raise vol.Invalid("No effective odometer is available")
+
+    async def log_car_wash(call: ServiceCall) -> None:
+        manager = manager_for(call)
+        when = call.data.get("date") or dt_util.now().date()
+        if when > dt_util.now().date():
+            raise vol.Invalid("Wash date cannot be in the future")
+        try:
+            await manager.async_log_car_wash(when)
+        except ValueError as error:
+            raise vol.Invalid(str(error)) from error
+
+    async def reset_car_wash(call: ServiceCall) -> None:
+        await manager_for(call).async_reset_car_wash()
+
     common = {
         vol.Required(ATTR_ENTRY_ID): cv.string,
         vol.Required("service"): vol.In(SERVICE_CATALOG),
@@ -315,6 +345,29 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             }
         ),
     )
+    hass.services.async_register(
+        DOMAIN,
+        "send_test_notification",
+        send_test_notification,
+        schema=vol.Schema({vol.Required(ATTR_ENTRY_ID): cv.string}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "log_car_wash",
+        log_car_wash,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ENTRY_ID): cv.string,
+                vol.Optional("date"): cv.date,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "reset_car_wash",
+        reset_car_wash,
+        schema=vol.Schema({vol.Required(ATTR_ENTRY_ID): cv.string}),
+    )
     return True
 
 
@@ -333,7 +386,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     def scheduled_notification(now) -> None:
         weekday = WEEKDAYS.get(manager.config.get(CONF_NOTIFY_WEEKDAY, "sun"), 6)
         if now.weekday() == weekday:
-            hass.async_create_task(_async_send_notification(hass, manager))
+            hass.async_create_task(_async_run_notification(hass, manager))
 
     entry.async_on_unload(
         async_track_time_change(
@@ -427,66 +480,125 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 def _parse_time(value: str | time) -> time:
-    if isinstance(value, time):
-        return value
-    parts = [int(part) for part in value.split(":")]
-    return time(parts[0], parts[1], parts[2] if len(parts) > 2 else 0)
+    return parse_clock_time(value)
 
 
-async def _async_send_notification(
-    hass: HomeAssistant, manager: VehicleManager
-) -> None:
-    config = manager.config
-    if not config.get(CONF_NOTIFY_ENABLED, False) or manager.effective_odometer is None:
-        return
+def _configured_targets(config: dict) -> list[str]:
+    """Return de-duplicated notification targets across modern and legacy keys."""
     targets = config.get(CONF_NOTIFY_TARGETS)
     if targets is None:
         legacy_target = str(config.get(CONF_NOTIFY_SERVICE, "")).strip()
         targets = [legacy_target] if legacy_target else []
     elif isinstance(targets, str):
         targets = [targets]
-    targets = list(
+    return list(
         dict.fromkeys(str(target).strip() for target in targets if str(target).strip())
     )
+
+
+async def _async_send_notification(
+    hass: HomeAssistant, manager: VehicleManager, *, test: bool = False
+) -> dict[str, Any]:
+    """Deliver a maintenance summary and report exactly what happened.
+
+    A test send deliberately bypasses the enabled switch and the empty-summary
+    skip so the user can confirm routing even when nothing is currently due.
+    """
+    config = manager.config
+    result: dict[str, Any] = {
+        "timestamp": dt_util.now().isoformat(),
+        "test": test,
+        "status": "skipped",
+        "targets": [],
+        "item_count": 0,
+        "error": None,
+    }
+
+    if not test and not config.get(CONF_NOTIFY_ENABLED, False):
+        result["status"] = "skipped_disabled"
+        return result
+    if manager.effective_odometer is None:
+        result["status"] = "skipped_no_odometer"
+        return result
+
+    targets = _configured_targets(config)
     if not targets:
-        return
+        result["status"] = "skipped_no_targets"
+        return result
+
+    threshold = int(config.get(CONF_NOTIFY_THRESHOLD, DEFAULT_NOTIFICATION_THRESHOLD))
     items = notification_items(
         manager.records,
         SERVICE_CATALOG,
         manager.effective_odometer,
-        int(config.get(CONF_NOTIFY_THRESHOLD, 1500)),
-        set(manager.config[CONF_SERVICES]),
+        threshold,
+        set(config[CONF_SERVICES]),
+        set(config.get(CONF_NOTIFY_MUTED_SERVICES, [])),
     )
-    if not items:
-        return
-    message = "\n".join(format_notification_item(item) for item in items)
+    result["item_count"] = len(items)
+    if not items and not test:
+        result["status"] = "skipped_no_items"
+        return result
+
     title = f"{manager.entry.title} maintenance"
+    if items:
+        message = "\n".join(format_notification_item(item) for item in items)
+    else:
+        message = (
+            f"Nothing is due within {threshold:,} mi. "
+            "This is a test of your Vehicle Maintenance notification settings."
+        )
+    if test:
+        title = f"{title} (test)"
+
     entity_targets = [
         target
         for target in targets
         if target.startswith("notify.") and hass.states.get(target) is not None
     ]
-    if entity_targets:
-        await hass.services.async_call(
-            "notify",
-            "send_message",
-            {"title": title, "message": message},
-            target={"entity_id": entity_targets},
-            blocking=False,
-        )
-    for target in targets:
-        if target in entity_targets or "." not in target:
-            continue
-        domain, service = target.split(".", 1)
-        if not hass.services.has_service(domain, service):
-            continue
-        await hass.services.async_call(
-            domain,
-            service,
-            {
-                "title": title,
-                "message": message,
-                "data": {"tag": f"vehicle_maintenance_{manager.entry.entry_id}"},
-            },
-            blocking=False,
-        )
+    delivered: list[str] = []
+    try:
+        if entity_targets:
+            await hass.services.async_call(
+                "notify",
+                "send_message",
+                {"title": title, "message": message},
+                target={"entity_id": entity_targets},
+                blocking=False,
+            )
+            delivered.extend(entity_targets)
+        for target in targets:
+            if target in entity_targets or "." not in target:
+                continue
+            domain, service = target.split(".", 1)
+            if not hass.services.has_service(domain, service):
+                continue
+            await hass.services.async_call(
+                domain,
+                service,
+                {
+                    "title": title,
+                    "message": message,
+                    "data": {"tag": f"vehicle_maintenance_{manager.entry.entry_id}"},
+                },
+                blocking=False,
+            )
+            delivered.append(target)
+    except Exception as error:  # noqa: BLE001 - reported back as a diagnostic
+        result["status"] = "error"
+        result["error"] = str(error)
+        result["targets"] = delivered
+        return result
+
+    result["targets"] = delivered
+    result["status"] = "sent" if delivered else "skipped_no_targets"
+    return result
+
+
+async def _async_run_notification(
+    hass: HomeAssistant, manager: VehicleManager, *, test: bool = False
+) -> dict[str, Any]:
+    """Send a summary and persist the delivery diagnostic for the dashboard."""
+    result = await _async_send_notification(hass, manager, test=test)
+    await manager.async_record_notification(result)
+    return result

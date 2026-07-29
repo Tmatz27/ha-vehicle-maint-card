@@ -59,7 +59,9 @@ def test_service_selection_uses_a_persistent_multi_select_list() -> None:
 def test_options_menu_exposes_vehicle_services_and_notifications() -> None:
     source = (ROOT / "custom_components/vehicle_maintenance/config_flow.py").read_text()
 
-    assert 'menu_options=["vehicle", "services", "notifications"]' in source
+    assert (
+        'menu_options=["vehicle", "services", "notifications", "car_wash"]' in source
+    )
     assert "washable_engine_air_filter" in (
         ROOT / "custom_components/vehicle_maintenance/strings.json"
     ).read_text()
@@ -177,3 +179,46 @@ def test_service_actions_never_offer_not_set() -> None:
 
     assert "label: Not set" not in services
     assert "label: Never performed" in services
+
+
+def test_new_actions_are_declared_for_home_assistant_and_the_card() -> None:
+    component = ROOT / "custom_components/vehicle_maintenance"
+    integration_source = (component / "__init__.py").read_text()
+    service_actions = (component / "services.yaml").read_text()
+    card_source = (component / "www/vehicle-maint-card.js").read_text()
+
+    for action in ("send_test_notification", "log_car_wash", "reset_car_wash"):
+        assert f'"{action}"' in integration_source
+        assert f"{action}:" in service_actions
+
+    # Only the wash action is reachable from the dashboard card itself.
+    assert '"log_car_wash"' in card_source
+
+
+def test_car_wash_and_notification_muting_are_configurable() -> None:
+    component = ROOT / "custom_components/vehicle_maintenance"
+    config_flow = (component / "config_flow.py").read_text()
+    strings = (component / "strings.json").read_text()
+
+    assert "async_step_car_wash" in config_flow
+    assert "car_wash_enabled" in strings
+    assert "car_wash_interval_days" in strings
+    assert "CONF_NOTIFY_MUTED_SERVICES" in config_flow
+    assert const.CONF_NOTIFY_MUTED_SERVICES == "notify_muted_services"
+    assert "notify_muted_services" in strings
+
+
+def test_translations_stay_in_sync_with_strings() -> None:
+    component = ROOT / "custom_components/vehicle_maintenance"
+    strings = json.loads((component / "strings.json").read_text())
+    english = json.loads((component / "translations/en.json").read_text())
+
+    assert strings == english
+
+
+def test_car_wash_is_never_part_of_the_mechanical_service_catalog() -> None:
+    """Washing must stay date-based and outside the mileage catalog."""
+    const_source = (ROOT / "custom_components/vehicle_maintenance/const.py").read_text()
+    catalog_section = const_source.split("SERVICE_CATALOG = {", 1)[1].split("\n}", 1)[0]
+
+    assert "car_wash" not in catalog_section

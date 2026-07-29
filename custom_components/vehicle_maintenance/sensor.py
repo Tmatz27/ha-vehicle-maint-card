@@ -9,21 +9,37 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ENTRY_ID,
     ATTR_SERVICE_KEY,
+    CONF_CAR_WASH_ENABLED,
+    CONF_CAR_WASH_INTERVAL_DAYS,
     CONF_INITIAL_INTERVALS,
+    CONF_NOTIFY_ENABLED,
+    CONF_NOTIFY_MUTED_SERVICES,
+    CONF_NOTIFY_TIME,
+    CONF_NOTIFY_WEEKDAY,
     CONF_SERVICES,
     CONF_WASHABLE_FILTERS,
+    DEFAULT_CAR_WASH_INTERVAL_DAYS,
+    DEFAULT_NOTIFICATION_TIME,
+    DEFAULT_NOTIFICATION_WEEKDAY,
     DEFAULT_UPCOMING_MILES,
     DOMAIN,
     SERVICE_CATALOG,
     SIGNAL_UPDATE,
+    WEEKDAY_INDEX,
 )
 from .manager import VehicleManager
 from .model import (
+    car_wash_days_remaining,
+    car_wash_status,
+    days_since_wash,
     miles_remaining,
+    next_notification_time,
+    parse_clock_time,
     scheduled_due_mileage,
     service_status,
     snooze_active,
@@ -35,10 +51,14 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     manager: VehicleManager = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        [EffectiveOdometerSensor(manager), VehicleSummarySensor(manager)]
-        + [MaintenanceSensor(manager, key) for key in manager.config[CONF_SERVICES]]
-    )
+    entities: list[SensorEntity] = [
+        EffectiveOdometerSensor(manager),
+        VehicleSummarySensor(manager),
+    ]
+    entities += [MaintenanceSensor(manager, key) for key in manager.config[CONF_SERVICES]]
+    if manager.config.get(CONF_CAR_WASH_ENABLED, False):
+        entities.append(CarWashSensor(manager))
+    async_add_entities(entities)
 
 
 class VehicleEntity(SensorEntity):
@@ -147,6 +167,36 @@ class VehicleSummarySensor(VehicleEntity):
             "next_service_miles": candidates[0][0] if candidates else None,
         }
 
+    def _notification_diagnostics(self) -> dict:
+        """Expose delivery diagnostics so routing problems are visible."""
+        config = self.manager.config
+        last = self.manager.last_notification or {}
+        enabled = bool(config.get(CONF_NOTIFY_ENABLED, False))
+        next_summary = None
+        if enabled:
+            weekday = WEEKDAY_INDEX.get(
+                config.get(CONF_NOTIFY_WEEKDAY, DEFAULT_NOTIFICATION_WEEKDAY), 6
+            )
+            scheduled = parse_clock_time(
+                config.get(CONF_NOTIFY_TIME, DEFAULT_NOTIFICATION_TIME)
+            )
+            next_summary = next_notification_time(
+                dt_util.now(), weekday, scheduled
+            ).isoformat()
+        return {
+            "notifications_enabled": enabled,
+            "notification_muted_services": list(
+                config.get(CONF_NOTIFY_MUTED_SERVICES, [])
+            ),
+            "next_scheduled_summary": next_summary,
+            "last_notification_status": last.get("status"),
+            "last_notification_time": last.get("timestamp"),
+            "last_notification_targets": last.get("targets"),
+            "last_notification_item_count": last.get("item_count"),
+            "last_notification_error": last.get("error"),
+            "last_notification_was_test": last.get("test"),
+        }
+
     @property
     def native_value(self) -> str:
         return self._summary()[0]
@@ -154,6 +204,7 @@ class VehicleSummarySensor(VehicleEntity):
     @property
     def extra_state_attributes(self) -> dict:
         state, counts = self._summary()
+        config = self.manager.config
         return {
             ATTR_ENTRY_ID: self.entry.entry_id,
             "integration": DOMAIN,
@@ -162,6 +213,51 @@ class VehicleSummarySensor(VehicleEntity):
             "odometer_source": self.manager.odometer_source,
             "status": state,
             **counts,
+            "car_wash_enabled": bool(config.get(CONF_CAR_WASH_ENABLED, False)),
+            **self._notification_diagnostics(),
+        }
+
+
+class CarWashSensor(VehicleEntity):
+    """Days since the vehicle was last washed.
+
+    Washing is tracked by date rather than mileage because weather, road salt,
+    and pollen drive it far more than distance driven.
+    """
+
+    _attr_name = "Car wash"
+    _attr_icon = "mdi:car-wash"
+    _attr_native_unit_of_measurement = "days"
+
+    def __init__(self, manager: VehicleManager) -> None:
+        super().__init__(manager)
+        self._attr_unique_id = f"{self.entry.entry_id}_car_wash"
+
+    def _interval_days(self) -> int:
+        return int(
+            self.manager.config.get(
+                CONF_CAR_WASH_INTERVAL_DAYS, DEFAULT_CAR_WASH_INTERVAL_DAYS
+            )
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        return days_since_wash(self.manager.car_wash, dt_util.now().date())
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        today = dt_util.now().date()
+        record = self.manager.car_wash
+        interval = self._interval_days()
+        return {
+            ATTR_ENTRY_ID: self.entry.entry_id,
+            "car_wash": True,
+            "status": car_wash_status(record, today, interval),
+            "interval_days": interval,
+            "days_since_wash": days_since_wash(record, today),
+            "days_remaining": car_wash_days_remaining(record, today, interval),
+            "last_washed_date": record.last_washed_date,
+            "wash_count": record.wash_count,
         }
 
 

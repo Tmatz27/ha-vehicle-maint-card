@@ -21,9 +21,16 @@ Each vehicle is configured through the Home Assistant interface and receives its
 - Sorts service-visit choices by miles remaining
 - Tracks washes, replacements, and total miles for optional reusable air filters
 - Extends maintenance reminders without recording false maintenance
+- Confirms a service visit on a recap screen before any record is written
+- Warns before an unusually long extension is applied
 - Provides Due Soon and All Maintenance views
 - Includes optional scheduled notifications to multiple devices or notify groups
-- Provides direct settings pages for vehicle details, services and intervals, and notifications
+- Allows individual services to be left out of notifications without hiding them from the card
+- Reports when the last summary was sent, to whom, and when the next one is due
+- Sends a test notification on demand to confirm routing
+- Optionally tracks car washes by date, kept separate from mechanical maintenance
+- Exports the current maintenance state to CSV for resale or warranty records
+- Provides direct settings pages for vehicle details, services and intervals, notifications, and car washes
 - Includes a mobile-friendly dashboard card
 - Supports a per-card accent color or the active Home Assistant theme color
 - Requires no additional custom dashboard cards
@@ -308,7 +315,33 @@ Use **Log a Service Visit** when several maintenance items were completed togeth
 3. For each selected washable filter, choose **Wash** or **Replace**.
 4. Log the visit using the current odometer, or enter the exact mileage if the visit happened earlier.
 
+Because a service visit writes several records at once, the card pauses on a confirmation screen listing every item and the exact mileage that will be applied. Select **Back** to change the selection, or **Confirm and log** to save. Nothing is written until you confirm.
+
 The integration applies one factual mileage to every selected item, calculates each recurring item's next due mileage from its own interval, clears active extensions for those items, and saves the vehicle once. One-time mileage milestones retain their milestone behavior.
+
+## Car washes
+
+Car wash tracking is optional and disabled by default. Enable it in **Settings > Devices & services > Vehicle Maintenance > Configure > Car wash tracking**, where you can also set how many days should pass before a wash is suggested. The default is 14 days.
+
+Washes are tracked by **date**, not mileage, because weather, road salt, and pollen matter far more than distance driven. A wash is never treated as mechanical maintenance and never appears in the service catalog, in Due Soon, or in maintenance notifications.
+
+When enabled, the card shows a **Car Care** section with a **Log Wash** button, and the vehicle gains:
+
+- `sensor.<vehicle>_car_wash` with the days since the last wash, the days remaining, the wash count, and the last wash date
+- `button.<vehicle>_log_car_wash` for logging a wash from a dashboard or automation
+
+Actions are also available:
+
+- `vehicle_maintenance.log_car_wash` accepts an optional earlier `date`
+- `vehicle_maintenance.reset_car_wash` clears the wash history
+
+A wash cannot be backdated earlier than the last recorded wash.
+
+## Export maintenance records
+
+Select **Export CSV** at the bottom of the card to download the vehicle's current maintenance state, including each service's status, last completed mileage, interval, next due mileage, miles remaining, active extension, and filter details.
+
+This is a snapshot of current state for resale, warranty, or personal records. It is intentionally not a lifetime repair-history database, a receipt manager, or a cost tracker.
 
 ## Extend Maintenance
 
@@ -396,6 +429,7 @@ Available settings include:
 - Notification mileage threshold
 - Notification weekday
 - Notification time
+- Services to leave out of notifications
 
 Select every phone or other notify entity that should receive the summary. For example:
 
@@ -422,12 +456,34 @@ Notifications include only maintenance that:
 
 - Belongs to the selected vehicle
 - Is currently enabled
+- Has not been left out of notifications
 - Has enough information to calculate a due mileage
 - Is within the notification threshold
 - Does not have an active extension
 - Has not already been completed as a mileage milestone
 
 Empty notifications are not sent.
+
+### Leave a service out of notifications
+
+Use **Leave out of notifications** to stop a specific service from appearing in the weekly summary while keeping it fully visible on the card. This suits items tracked by eye, such as tire replacement or wiper blades.
+
+Muting only affects notifications. It never changes the maintenance record, the interval, or the card. Deselecting a service in **Tracked services and intervals** also clears its mute, so re-enabling the service later does not leave it silently muted.
+
+### Test notifications and delivery diagnostics
+
+Each vehicle has a `button.<vehicle>_send_test_notification` entity, and a matching `vehicle_maintenance.send_test_notification` action. A test send goes out immediately to every configured recipient, even when nothing is currently due, so routing can be confirmed without waiting for the weekly summary. Test messages are titled with a `(test)` suffix.
+
+The maintenance summary sensor reports what happened on the most recent attempt:
+
+- `notifications_enabled`
+- `next_scheduled_summary`
+- `last_notification_status` — for example `sent`, `skipped_no_items`, `skipped_no_targets`, or `error`
+- `last_notification_time`
+- `last_notification_targets`
+- `last_notification_item_count`
+- `last_notification_error`
+- `last_notification_was_test`
 
 Notification settings can be changed under:
 
