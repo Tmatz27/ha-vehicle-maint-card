@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fixed the card's accent-color header tint (the `.hero` background gradient) failing to render on themes that only define `--card-background-color`, which is the default for nearly every Home Assistant theme. `color-mix()` now falls back correctly instead of silently dropping the whole background declaration.
+- Corrected the bundled card's internal version banner, which still logged `v0.2.0` in the browser console after the 0.2.1 and 0.2.2 releases.
+- Wired the Home Assistant Store/runtime-contract CI job to run the full test suite instead of a single file, so `tests/test_integrity_runtime.py` (batch-logging atomicity and summary-sensor regression checks) actually executes in CI.
+
 ## 0.2.2 - 2026-07-26
 
 - Fixed the visual editor losing focus when Home Assistant repeats `setConfig()` while the card configuration dialog is open.

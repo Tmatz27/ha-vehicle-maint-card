@@ -162,10 +162,12 @@ def test_release_and_frontend_cache_versions_stay_aligned() -> None:
     manifest = json.loads((component / "manifest.json").read_text())
     frontend_source = (component / "frontend.py").read_text()
     bootstrap_source = (component / "www/vehicle-maint-bootstrap.js").read_text()
+    card_source = (component / "www/vehicle-maint-card.js").read_text()
 
     version = manifest["version"]
     assert f'CARD_VERSION = "{version}"' in frontend_source
     assert f'CARD_VERSION = "{version}"' in bootstrap_source
+    assert f'CARD_VERSION = "{version}"' in card_source
 
 
 def test_service_actions_never_offer_not_set() -> None:

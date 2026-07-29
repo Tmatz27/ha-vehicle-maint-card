@@ -55,6 +55,14 @@ test("accent colors are normalized safely and choose readable button text", () =
   assert.equal(accentTextColor("#1b5e20"), "#ffffff");
 });
 
+test("hero background keeps its accent tint even when the theme never sets --ha-card-background", () => {
+  // Most Home Assistant themes only define --card-background-color. Without a
+  // fallback here, color-mix() receives an invalid argument and the browser
+  // drops the whole background declaration, silently hiding the accent tint.
+  assert.equal(source.includes("var(--ha-card-background,var(--card-background-color))"), true);
+  assert.equal(source.includes("color-mix(in srgb,var(--vm-accent) 16%,var(--ha-card-background))"), false);
+});
+
 test("completion preview uses the exact entered mileage", () => {
   assert.deepEqual(completionDetails("43500", 44973, 6000, false), {
     valid: true,

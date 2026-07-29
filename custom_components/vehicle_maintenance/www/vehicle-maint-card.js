@@ -1,4 +1,4 @@
-const CARD_VERSION = "0.2.0";
+const CARD_VERSION = "0.2.2";
 const DOMAIN = "vehicle_maintenance";
 const DEFAULT_UPCOMING_MILES = 2000;
 const DEFAULT_EXTEND_MILES = 1000;
@@ -530,7 +530,7 @@ class VehicleMaintCard extends HTMLElement {
       vehicle-maint-card{display:block}
       ha-card{overflow:hidden;border-radius:24px}
       button,input,select{font:inherit}
-      .hero{display:flex;gap:14px;align-items:center;padding:21px;background:linear-gradient(135deg,color-mix(in srgb,var(--vm-accent) 16%,var(--ha-card-background)),var(--ha-card-background) 70%)}
+      .hero{display:flex;gap:14px;align-items:center;padding:21px;background:linear-gradient(135deg,color-mix(in srgb,var(--vm-accent) 16%,var(--ha-card-background,var(--card-background-color))),var(--ha-card-background,var(--card-background-color)) 70%)}
       .car{display:grid;place-items:center;width:52px;height:52px;border-radius:18px;color:var(--vm-accent);background:color-mix(in srgb,var(--vm-accent) 18%,transparent)}
       .title{flex:1;min-width:0}.title b,.title small{display:block}.title b{overflow:hidden;font-size:1.25rem;text-overflow:ellipsis;white-space:nowrap}.title small{color:var(--secondary-text-color);margin-top:3px}
       .chips{display:flex;gap:8px;padding:12px 18px;overflow-x:auto;border-bottom:1px solid var(--divider-color)}.chip{flex:0 0 auto;padding:6px 10px;border-radius:14px;background:var(--secondary-background-color);font-size:.82rem;font-weight:600}.chip.overdue{color:var(--error-color)}.chip.extended{color:var(--vm-accent)}
